@@ -45,7 +45,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data
           if git diff --cached --quiet; then echo "No data changes."; exit 0; fi
-          git commit -m "資料更新 $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
+          git commit -m "資料更新 $(date -u -d '+8 hours' +'%Y-%m-%d %H:%M')（臺灣時間）"
           git push
 
   deploy:
@@ -63,9 +63,11 @@ jobs:
       - name: 準備網站檔案
         run: |
           mkdir -p _site/data
-          cp "$APP_DIR/dashboard.html" _site/index.html
-          cp "$APP_DIR/dashboard.html" _site/dashboard.html
+          # data.js?v=<run id>: browsers fetch the new data after every update instead of a cached copy
+          sed "s#src=\"data/data.js\"#src=\"data/data.js?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"#" "$APP_DIR/dashboard.html" > _site/index.html
+          cp _site/index.html _site/dashboard.html
           cp "$APP_DIR/data/data.js" _site/data/data.js
+          grep -o 'data/data.js?v=[^"]*' _site/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
