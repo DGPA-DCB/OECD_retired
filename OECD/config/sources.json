@@ -32,8 +32,8 @@
   ],
   "_oecd說明": "OECD 查詢代碼以「.」分隔各維度；網址結尾不可是「.」（Windows PowerShell 會自動刪除結尾的點，導致查詢格式錯誤而被拒），所以最後一個維度一律寫明確的值。",
   "oecd": [
-    { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率、退休年齡、老年貧窮、年金支出）",
-      "url": "https://sdmx.oecd.org/public/rest/data/OECD.ELS.SPD,DSD_PAG@DF_PAG,1.0/.A.GPRR100+NPRR100+CRPLF22+FRPLF22+ELMEA+EYLME+OAIP+PEP...._Z+M+MV?startPeriod=2010&format=csvfilewithlabels" },
+    { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率〔低薪／平均／高薪〕、退休年齡、老年貧窮、年金支出）",
+      "url": "https://sdmx.oecd.org/public/rest/data/OECD.ELS.SPD,DSD_PAG@DF_PAG,1.0/.A.GPRR50+GPRR100+GPRR200+NPRR50+NPRR100+NPRR200+CRPLF22+FRPLF22+ELMEA+EYLME+OAIP+PEP...._Z+M+MV?startPeriod=2010&format=csvfilewithlabels" },
     { "key": "oecd_socx", "label": "OECD SOCX 老年及遺屬現金給付支出占 GDP",
       "url": "https://sdmx.oecd.org/public/rest/data/OECD.ELS.SPD,DSD_SOCX_AGG@DF_PUB_OLD,1.0/.A..PT_B1GQ...._Z?startPeriod=2000&format=csvfilewithlabels" },
     { "key": "oecd_pa",   "label": "OECD 退休準備資產占 GDP",
