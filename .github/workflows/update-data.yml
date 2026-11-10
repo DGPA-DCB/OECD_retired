@@ -1,0 +1,75 @@
+name: 更新資料
+
+on:
+  workflow_dispatch:          # 儀表板「更新資料」按鈕 → 在 Actions 頁按 Run workflow
+  schedule:
+    - cron: '0 22 * * *'      # 每天 06:00（臺灣時間）自動更新
+  push:
+    branches: [main]          # 程式或設定變更後重新發布網頁（不重抓資料）
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+# 專案檔案位於 repo 的 OECD/ 資料夾
+env:
+  APP_DIR: OECD
+
+jobs:
+  update:
+    if: github.event_name != 'push'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: OECD
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 抓取所有來源並重建 data/data.js
+        shell: powershell
+        run: |
+          & ./scripts/update.ps1
+          # exit 1 = some sources kept their previous copy (still publish); 2 = a source has no data at all
+          if ($LASTEXITCODE -ge 2) { Write-Host 'Some sources have no data.'; exit 1 }
+          exit 0
+
+      - name: 提交更新後的資料
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "No data changes."; exit 0; fi
+          git commit -m "資料更新 $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
+          git push
+
+  deploy:
+    needs: update
+    if: always() && (needs.update.result == 'success' || needs.update.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 準備網站檔案
+        run: |
+          mkdir -p _site/data
+          cp "$APP_DIR/dashboard.html" _site/index.html
+          cp "$APP_DIR/dashboard.html" _site/dashboard.html
+          cp "$APP_DIR/data/data.js" _site/data/data.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
