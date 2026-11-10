@@ -1,0 +1,41 @@
+{
+  "_說明": "更新程式依此清單抓取資料。datagov 類以 data.gov.tw 資料集編號查詢最新下載網址；ids 可列多個。有 discover 設定的來源（退撫每年度會新開資料集），每次更新會用 query 搜尋 data.gov.tw，標題符合 pattern 的資料集自動併入，不必手動加編號；也可在儀表板「資料來源與更新」頁手動新增。parts 為該資料集第幾個 CSV 檔（從 0 起算）。",
+  "repo": "DGPA-DCB/OECD_retired",
+  "datagov": [
+    { "key": "fund_monthly",   "label": "退撫基金每月經營概況",               "ids": [161126, 167879, 172967, 177058], "parts": [0],
+      "discover": { "query": "退撫基金每月經營概況", "pattern": "^(\\d+)年度退撫基金每月經營概況$" } },
+    { "key": "fund_annual",    "label": "退撫基金年度經營概況",               "ids": [172649, 176686], "parts": [0],
+      "discover": { "query": "退撫基金年度經營概況", "pattern": "^(\\d+)年退撫基金年度經營概況$" } },
+    { "key": "fund_members",   "label": "退撫基金參加基金人數",               "ids": [159102], "parts": [0] },
+    { "key": "fund_flow",      "label": "退撫基金累計收繳／撥付情形",         "ids": [159103], "parts": [0, 1] },
+    { "key": "fund_reform",    "label": "退撫基金年改挹注款",                 "ids": [159105], "parts": [0] },
+    { "key": "li_fund_annual", "label": "勞工保險基金年度經營概況",           "ids": [57162],  "parts": [0, 1] },
+    { "key": "lp_fund_annual", "label": "新制勞工退休基金年度經營概況",       "ids": [57161],  "parts": [0] },
+    { "key": "np_fund_annual", "label": "國民年金保險基金年度經營概況",       "ids": [57169],  "parts": [0] },
+    { "key": "lp_fund_monthly","label": "新制勞工退休基金每月經營概況",       "ids": [31696],  "parts": [0] },
+    { "key": "np_fund_monthly","label": "國民年金保險基金每月經營概況",       "ids": [31705],  "parts": [0] },
+    { "key": "li_share",       "label": "勞就保保險費分擔金額表（現行費率）", "ids": [6259],   "parts": [0] },
+    { "key": "li_grade",       "label": "歷年勞工保險投保薪資分級表",         "ids": [45940],  "parts": [0] },
+    { "key": "np_rate",        "label": "國民年金歷年月投保金額及保險費率",   "ids": [36841],  "parts": [0] },
+    { "key": "np_addon",       "label": "國民年金歷年老年年金加計金額",       "ids": [164025], "parts": [0] },
+    { "key": "np_basic",       "label": "國保老年基本保證年金及原住民給付",   "ids": [13347],  "parts": [0] },
+    { "key": "np_benefit",     "label": "國保各項年金給付每月核定件數及金額", "ids": [13348],  "parts": [0], "accumulate": true,
+      "_accumulate": "此資料集每次只提供最新一個月，accumulate=true 會把每次抓到的月份累積在本機，形成時間序列。" },
+    { "key": "farmer",         "label": "老年農民福利津貼核付人數",           "ids": [17341],  "parts": [0] },
+    { "key": "gei_rate",       "label": "公教人員保險費率（臺灣銀行）",       "ids": [31986],  "parts": [0],
+      "_note": "臺灣銀行原始網址有機器人驗證，更新程式會自動改用 data.gov.tw 平台轉檔副本（非即時）。" },
+    { "key": "gei_benefit",   "label": "公教人員保險現金給付統計",           "ids": [165685], "parts": [0] },
+    { "key": "ndc_annuity",    "label": "各社會保險老年給付領取人數（年金）", "ids": [165282], "parts": [0] },
+    { "key": "ndc_members",    "label": "職業別退休金參加人數",               "ids": [144990], "parts": [0] },
+    { "key": "ndc_fund_size",  "label": "職業別退休金基金運用規模",           "ids": [157823], "parts": [0] },
+    { "key": "ndc_recipients", "label": "各職業退休金制度領取人數（年金）",   "ids": [170821], "parts": [0] }
+  ],
+  "oecd": [
+    { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率、退休年齡、老年貧窮、年金支出）",
+      "url": "https://sdmx.oecd.org/public/rest/data/OECD.ELS.SPD,DSD_PAG@DF_PAG,1.0/.A.GPRR100+NPRR100+CRPLF22+FRPLF22+ELMEA+EYLME+OAIP+PEP....?startPeriod=2010&format=csvfilewithlabels" },
+    { "key": "oecd_socx", "label": "OECD SOCX 老年及遺屬現金給付支出占 GDP",
+      "url": "https://sdmx.oecd.org/public/rest/data/OECD.ELS.SPD,DSD_SOCX_AGG@DF_PUB_OLD,1.0/.A..PT_B1GQ....?startPeriod=2000&format=csvfilewithlabels" },
+    { "key": "oecd_pa",   "label": "OECD 退休準備資產占 GDP",
+      "url": "https://sdmx.oecd.org/public/rest/data/OECD.DAF.CM,DSD_FP@DF_PA,1.0/.A..PT_B1GQ...?startPeriod=2005&format=csvfilewithlabels" }
+  ]
+}

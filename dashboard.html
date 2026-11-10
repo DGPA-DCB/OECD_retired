@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>退撫與年金指標儀表板</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb; --surface-2: #f3f2ee;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --good-text: #006300;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --good-text: #0ca30c; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #232321;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --good-text: #0ca30c; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; font-size: 15px; line-height: 1.55; }
+a { color: var(--accent); }
+header.top { position: sticky; top: 0; z-index: 10; background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+.top-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0 6px; }
+.top-row h1 { font-size: 20px; margin: 0; flex: 1 1 auto; }
+.meta { color: var(--text-secondary); font-size: 13px; }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 0; }
+nav.tabs button { border: 0; background: none; color: var(--text-secondary); font: inherit; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+nav.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
+button.btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface-1); color: var(--text-primary); cursor: pointer; }
+button.btn:hover { background: var(--surface-2); }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { padding: 16px 0 48px; }
+section.tab { display: none; }
+section.tab.active { display: block; }
+.intro { color: var(--text-secondary); margin: 0 0 16px; max-width: 900px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 16px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card h3 { margin: 0; font-size: 16px; }
+.card .sub { color: var(--text-secondary); font-size: 13px; margin: 2px 0 10px; }
+.card .src { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+.card-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.chart-box { position: relative; width: 100%; height: 300px; }
+details.tbl { margin-top: 10px; }
+details.tbl summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+.table-scroll { overflow: auto; max-height: 420px; border: 1px solid var(--border); border-radius: 6px; margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-2); font-weight: 600; z-index: 1; }
+th:first-child, td:first-child { text-align: left; }
+td { font-variant-numeric: tabular-nums; }
+td.txt, th.txt { text-align: left; white-space: normal; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.kpi .k-label { font-size: 13px; color: var(--text-secondary); }
+.kpi .k-value { font-size: 26px; font-weight: 600; margin: 2px 0; }
+.kpi .k-note { font-size: 12px; color: var(--text-muted); }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-secondary); white-space: nowrap; }
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.banner { border: 1px solid var(--border); border-left: 4px solid var(--warning); background: var(--surface-1); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; color: var(--text-primary); }
+.picker { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 14px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
+.picker label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.picker .ptitle { width: 100%; color: var(--text-secondary); }
+.manual-table input, .manual-table select, .manual-table textarea { font: inherit; font-size: 13px; width: 100%; min-width: 80px; padding: 4px 6px; border: 1px solid var(--axis); border-radius: 4px; background: var(--surface-1); color: var(--text-primary); }
+.manual-table textarea { min-width: 220px; min-height: 52px; resize: vertical; }
+.manual-table td { vertical-align: top; text-align: left; white-space: normal; }
+.manual-table .path { min-width: 260px; font-size: 12px; color: var(--text-secondary); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
+.empty { padding: 40px; text-align: center; color: var(--text-secondary); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--axis); background: var(--surface-1); color: var(--text-primary); cursor: pointer; }
+.chip .sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.chip[aria-pressed="false"] { color: var(--text-muted); text-decoration: line-through; }
+.chip[aria-pressed="false"] .sw { opacity: .3; }
+.cmp-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 4px 20px; font-size: 13px; }
+.cmp-list fieldset { border: 0; padding: 0; margin: 0 0 10px; }
+.cmp-list legend { font-weight: 600; color: var(--text-secondary); padding: 0; margin-bottom: 2px; }
+.cmp-list label { display: flex; gap: 6px; align-items: flex-start; padding: 2px 0; cursor: pointer; }
+@media (max-width: 600px) { .top-row h1 { font-size: 17px; } .chart-box { height: 260px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="top-row">
+      <h1>退撫與年金指標儀表板</h1>
+      <span class="meta" id="meta"></span>
+      <button class="btn" id="updateBtn" title="重新抓取所有來源資料">更新資料</button>
+      <button class="btn primary" id="exportAll" title="匯出所有表格與可編輯的 Excel 圖表">匯出全部 Excel</button>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="fund" aria-selected="true">退撫與退休基金</button>
+      <button role="tab" data-tab="ins">社會保險費率與津貼</button>
+      <button role="tab" data-tab="oecd">OECD 國際比較</button>
+      <button role="tab" data-tab="cmp">跨指標比較</button>
+      <button role="tab" data-tab="manual">人工確認參數</button>
+      <button role="tab" data-tab="sources">資料來源與更新</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <dialog id="updDlg" style="max-width:560px;border:1px solid var(--border);border-radius:10px;background:var(--surface-1);color:var(--text-primary);padding:20px">
+    <h3 style="margin-top:0">更新資料</h3>
+    <div id="updBody"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <a class="btn primary" id="updGo" target="_blank" rel="noopener" style="text-decoration:none" hidden>前往執行更新</a>
+      <button class="btn" onclick="this.closest('dialog').close()">關閉</button>
+    </div>
+  </dialog>
+  <div id="nodata" class="empty" hidden>
+    找不到資料檔 <code>data/data.js</code>。請在本資料夾雙擊 <b>一鍵更新資料.bat</b>，完成後會自動開啟本頁。
+  </div>
+  <section class="tab active" id="tab-fund">
+    <p class="intro">公教人員退撫基金的規模、收益、參加人數與收支，並與勞保、勞退新制、國保等基金對照。點圖例可顯示／隱藏該數列；各圖下方可展開資料表；每張卡片右上角可單獨匯出 Excel（含可編輯圖表）。要把不同頁的指標放在一起看，請用「跨指標比較」分頁。</p>
+    <div id="fund-banner"></div>
+    <div class="kpis" id="kpi-fund"></div>
+    <div class="grid" id="grid-fund"></div>
+  </section>
+  <section class="tab" id="tab-ins">
+    <p class="intro">勞保、國保費率與給付額度，以及老農津貼。標示「人工確認」的數值來自「人工確認參數」頁，無法由開放平台自動取得。</p>
+    <div class="kpis" id="kpi-ins"></div>
+    <div class="grid" id="grid-ins"></div>
+  </section>
+  <section class="tab" id="tab-oecd">
+    <p class="intro">OECD 各國資料作為國際參照（OECD 資料庫不含臺灣）。勾選國家會影響時間序列圖；橫條圖列出全部國家，已勾選國家以粗體標示。</p>
+    <div class="picker" id="picker"></div>
+    <div class="grid" id="grid-oecd"></div>
+  </section>
+  <section class="tab" id="tab-cmp">
+    <p class="intro">從各頁的時間序列中任選最多 8 條放在同一張圖比較。單位不同的指標請用「指數化」或「年增率」，讓趨勢可以直接對照（本頁不使用雙 Y 軸）。點圖下方的數列標籤可顯示／隱藏該數列。</p>
+    <div class="card wide">
+      <div class="toolbar">
+        <label>頻率 <select id="cmpFreq"><option value="Y">年資料</option><option value="M">月資料</option></select></label>
+        <label>呈現 <select id="cmpMode"><option value="index">指數化（區間首期＝100）</option><option value="yoy">年增率（%）</option><option value="raw">原始值</option></select></label>
+        <label>起 <select id="cmpFrom"></select></label>
+        <label>迄 <select id="cmpTo"></select></label>
+        <button class="btn" id="cmpShowAll">全部顯示</button>
+        <button class="btn" id="cmpHideAll">全部隱藏</button>
+        <button class="btn" id="cmpClear">清除選取</button>
+        <button class="btn" id="cmpExport">匯出 Excel</button>
+      </div>
+      <div id="cmpWarn"></div>
+      <div class="chart-box" style="height:420px"><canvas id="cv-cmp" role="img" aria-label="跨指標比較圖"></canvas></div>
+      <div class="chips" id="cmpChips"></div>
+      <details class="tbl"><summary>顯示資料表</summary><div class="table-scroll" id="cmpTable"></div></details>
+    </div>
+    <div class="card wide" style="margin-top:16px"><h3>選擇指標</h3><div class="sub">勾選要比較的數列（依目前頻率列出）</div><div id="cmpList" class="cmp-list"></div></div>
+  </section>
+  <section class="tab" id="tab-manual">
+    <p class="intro">以下參數沒有可自動擷取的開放資料，請依「確認路徑」核對後填寫並把狀態改為「已確認」。修改只會保存在這台電腦的瀏覽器；要讓所有人看到，請按「匯出確認結果」另存 JSON，再<a id="mEditLink" target="_blank" rel="noopener">到 GitHub 上傳覆蓋 config/manual.json</a>，下次更新後即成為所有人的預設值。</p>
+    <div class="toolbar">
+      <button class="btn" id="mExport">匯出確認結果（JSON）</button>
+      <button class="btn" id="mImport">匯入 JSON</button>
+      <button class="btn" id="mReset">還原為 config 預設值</button>
+      <button class="btn" id="mExcel">匯出 Excel</button>
+      <input type="file" id="mFile" accept=".json,application/json" hidden>
+      <span class="meta" id="mSaved"></span>
+    </div>
+    <div id="manual-root"></div>
+  </section>
+  <section class="tab" id="tab-sources">
+    <p class="intro">按頁首「更新資料」即可重新抓取所有來源（線上版由 GitHub 自動執行；另每天清晨自動更新一次）。某個來源下載失敗時，會沿用上一次成功的資料並在下表標示；機關原始網址被擋時，會改用 data.gov.tw 平台的轉檔副本。</p>
+    <div id="src-banner"></div>
+    <div class="card wide" style="margin-bottom:16px"><h3>每年度新開的資料集</h3>
+      <div class="sub">退撫基金管理局每年度會新開一個資料集。更新時會自動到 data.gov.tw 搜尋並併入新年度，不需手動加入；下表為最近一次搜尋結果。若自動搜尋失敗，可用「查詢連結」找到編號，再用「手動新增」加入設定檔。</div>
+      <div class="table-scroll" style="max-height:none" id="disc-table"></div></div>
+    <div class="card wide"><div class="table-scroll" style="max-height:none" id="src-table"></div></div>
+  </section>
+</main>
+
+<script src="data/data.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+'use strict';
+const D = window.PENSION_DATA;
+
+/* ---------------- helpers ---------------- */
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cur); cur = '';
+      if (row.some(v => v.trim() !== '')) rows.push(row.map(v => v.trim()));
+      row = [];
+    } else cur += c;
+  }
+  row.push(cur); if (row.some(v => v.trim() !== '')) rows.push(row.map(v => v.trim()));
+  return rows;
+}
+const num = v => { if (v == null) return null; const s = String(v).trim().replace(/,/g, ''); if (s === '' || s === '-' || s === '—') return null; const x = Number(s); return isFinite(x) ? x : null; };
+const r2 = (x, d = 2) => x == null ? null : Math.round(x * 10 ** d) / 10 ** d;
+const yi = v => v == null ? null : r2(v / 1e8, 1);          // 元 -> 億元
+const pad2 = n => String(n).padStart(2, '0');
+function rocYM(s) { s = String(s).trim(); const m = s.match(/^(\d{2,3})\/?(\d{2})$/); if (!m) return null; const y = +m[1] + 1911; return { iso: `${y}-${m[2]}`, roc: `${+m[1]}/${m[2]}`, key: y * 100 + +m[2] }; }
+function isoYM(s) { const m = String(s).trim().match(/^(\d{4})-?(\d{2})$/); if (!m) return null; return { iso: `${m[1]}-${m[2]}`, roc: `${+m[1] - 1911}/${m[2]}`, key: +m[1] * 100 + +m[2] }; }
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (v, d) => v == null || v === '' ? '' : (typeof v === 'number' ? v.toLocaleString('zh-TW', { maximumFractionDigits: d == null ? 2 : d }) : String(v));
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const SERIES = () => [1, 2, 3, 4, 5, 6, 7, 8].map(i => cssv('--s' + i));
+
+/** tables of a source: [{header, rows, item}] */
+function tables(key) {
+  const s = D && D.sources[key]; if (!s) return [];
+  return s.items.filter(it => it.csv).map(it => { const a = parseCSV(it.csv); return { header: a[0].map(h => h.trim()), rows: a.slice(1), item: it }; });
+}
+const col = (h, re) => h.findIndex(x => re.test(x));
+
+/* ---------------- panel definitions ----------------
+   panel = { id, tab, title, sub, src, wide, table:{columns, rows}, chart:{type:'line'|'col'|'colStacked'|'barh', series:[{col,name}], unit, highlight?} } */
+const P = [];
+function add(p) { P.push(p); }
+
+function buildDomestic() {
+  /* --- annual fund returns & sizes --- */
+  const byYear = {};
+  const put = (y, k, v) => { y = +y; if (!y) return; (byYear[y] = byYear[y] || {})[k] = v; };
+  tables('fund_annual').forEach(t => { const h = t.header, cy = 0, cs = col(h, /結餘/), cr = col(h, /收益率/);
+    t.rows.forEach(r => { put(r[cy], 'fr', num(r[cr])); put(r[cy], 'fs', yi(num(r[cs]))); }); });
+  tables('li_fund_annual').forEach(t => { const h = t.header, cs = col(h, /運用餘額/), cr = col(h, /收益率/);
+    t.rows.forEach(r => { put(r[0], 'lr', num(r[cr])); put(r[0], 'ls', yi(num(r[cs]))); }); });
+  tables('lp_fund_annual').forEach(t => { const h = t.header, cs = col(h, /運用餘額/), cr = col(h, /^收益率/);
+    t.rows.forEach(r => { put(r[0], 'pr', r2(num(r[cr]))); put(r[0], 'ps', yi(num(r[cs]))); }); });
+  tables('np_fund_annual').forEach(t => { const h = t.header, cs = col(h, /運用餘額/), cr = col(h, /收益率/);
+    t.rows.forEach(r => { put(r[0], 'nr', num(r[cr])); put(r[0], 'ns', yi(num(r[cs]))); }); });
+  const years = Object.keys(byYear).map(Number).filter(y => y >= 2010).sort();
+  add({ id: 'fund_ret', tab: 'fund', title: '四大基金年度收益率', sub: '單位：%；年度整體收益率', unit: '%',
+    src: '退撫基金管理局（data.gov.tw 172649、176686）；勞動基金運用局（57162、57161、57169）。勞保基金 2022 年起為普通事故部分。',
+    table: { columns: ['年度', '退撫基金', '勞工保險基金', '新制勞工退休基金', '國民年金保險基金'],
+      rows: years.map(y => [String(y), byYear[y].fr ?? null, byYear[y].lr ?? null, byYear[y].pr ?? null, byYear[y].nr ?? null]) },
+    chart: { type: 'line', series: [1, 2, 3, 4].map(c => ({ col: c })) } });
+  add({ id: 'fund_size', tab: 'fund', title: '四大基金運用規模', sub: '單位：億元；年底基金運用結餘／餘額', unit: '億元',
+    src: '同上。',
+    table: { columns: ['年度', '退撫基金', '勞工保險基金', '新制勞工退休基金', '國民年金保險基金'],
+      rows: years.map(y => [String(y), byYear[y].fs ?? null, byYear[y].ls ?? null, byYear[y].ps ?? null, byYear[y].ns ?? null]) },
+    chart: { type: 'line', series: [1, 2, 3, 4].map(c => ({ col: c })) } });
+
+  /* --- monthly YTD returns --- */
+  const byM = {};
+  const putM = (ym, k, v) => { if (!ym) return; (byM[ym.key] = byM[ym.key] || { ym })[k] = v; };
+  tables('fund_monthly').forEach(t => { const cr = col(t.header, /收益率/), cs = col(t.header, /結餘/);
+    t.rows.forEach(r => { const ym = rocYM(r[0]); putM(ym, 'f', num(r[cr])); putM(ym, 'fs', yi(num(r[cs]))); }); });
+  tables('lp_fund_monthly').forEach(t => { const cr = col(t.header, /^收益率/); t.rows.forEach(r => putM(isoYM(r[0]), 'p', r2(num(r[cr])))); });
+  tables('np_fund_monthly').forEach(t => { const cr = col(t.header, /收益率/); t.rows.forEach(r => putM(isoYM(r[0]), 'n', num(r[cr]))); });
+  const mk = Object.keys(byM).map(Number).sort().slice(-13);
+  add({ id: 'fund_ytd', tab: 'fund', title: '各基金當年度累計收益率（近 13 個月）', sub: '單位：%；每年 1 月重新起算', unit: '%',
+    src: '退撫基金每月經營概況（177058 等）；勞動基金運用局每月經營概況（31696、31705）。勞保基金每月資料集已停更於 2022 年，故不列入。',
+    table: { columns: ['年月', '退撫基金', '新制勞工退休基金', '國民年金保險基金'], rows: mk.map(k => [byM[k].ym.iso, byM[k].f ?? null, byM[k].p ?? null, byM[k].n ?? null]) },
+    chart: { type: 'line', series: [1, 2, 3].map(c => ({ col: c })) } });
+  const fundLatest = Object.keys(byM).map(Number).filter(k => byM[k].f != null).sort().pop();
+  D._fundLatest = fundLatest ? byM[fundLatest] : null;
+
+  /* --- members --- */
+  const mem = [];
+  tables('fund_members').forEach(t => t.rows.forEach(r => { const ym = rocYM(r[0]); if (ym) mem.push([ym.roc, num(r[1]), num(r[2]), num(r[3]), (num(r[1]) || 0) + (num(r[2]) || 0) + (num(r[3]) || 0)]); }));
+  add({ id: 'fund_mem', tab: 'fund', title: '退撫基金參加人數', sub: '單位：人；每月底', unit: '人',
+    src: '退撫基金管理局「退撫基金參加基金人數」（data.gov.tw 159102）。',
+    table: { columns: ['年月(民國)', '公務人員', '教育人員', '軍職人員', '合計'], rows: mem },
+    chart: { type: 'line', series: [1, 2, 3].map(c => ({ col: c })) } });
+
+  /* --- contributions vs payouts --- */
+  const ft = tables('fund_flow'); const flow = {};
+  ft.forEach((t, i) => { const part = t.item.partIndex === 1 || /撥付/.test(t.item.part || '') ? 'out' : 'in';
+    t.rows.forEach(r => { const ym = rocYM(r[0]); if (!ym) return; const o = flow[ym.key] = flow[ym.key] || { ym };
+      o[part] = [num(r[1]), num(r[2]), num(r[3])]; }); });
+  const fk = Object.keys(flow).map(Number).sort();
+  const sum = a => a ? r2(a.reduce((s, x) => s + (x || 0), 0), 2) : null;
+  add({ id: 'fund_flow', tab: 'fund', title: '退撫基金累計收繳與撥付', sub: '單位：億元；自基金成立累計，公教軍合計', unit: '億元',
+    src: '退撫基金管理局「退撫基金收繳撥付情形」（data.gov.tw 159103）。',
+    table: { columns: ['年月(民國)', '累計收繳', '累計撥付', '收繳減撥付', '收繳-公務', '收繳-教育', '收繳-軍職', '撥付-公務', '撥付-教育', '撥付-軍職'],
+      rows: fk.map(k => { const o = flow[k], a = sum(o.in), b = sum(o.out); return [o.ym.roc, a, b, a != null && b != null ? r2(a - b) : null, ...(o.in || [null, null, null]), ...(o.out || [null, null, null])]; }) },
+    chart: { type: 'line', series: [{ col: 1 }, { col: 2 }] } });
+
+  /* --- pension reform savings injected --- */
+  const rf = tables('fund_reform')[0];
+  if (rf) add({ id: 'fund_reform', tab: 'fund', title: '年金改革節省經費挹注退撫基金', sub: '單位：億元；依挹注年度', unit: '億元',
+    src: '退撫基金管理局「退撫基金年改挹注款專區」（data.gov.tw 159105）。',
+    table: { columns: ['挹注年度(民國)', '節省年度(民國)', '公務人員', '政務人員', '教育人員', '軍職人員', '國軍精簡政策挹注款'],
+      rows: rf.rows.map(r => [r[1] + '年', r[0] + '年', yi(num(r[2])), yi(num(r[3])), yi(num(r[4])), yi(num(r[5])), yi(num(r[6]))]) },
+    chart: { type: 'colStacked', series: [2, 3, 4, 5, 6].map(c => ({ col: c })) } });
+
+  /* --- 公保 --- */
+  const g = tables('gei_benefit')[0];
+  if (g) { const h = g.header, c = re => col(h, re);
+    const i1 = c(/養老給付_一次給付人數/), i2 = c(/養老給付_一次給付金額/), i3 = c(/養老給付_年金給付人數/), i4 = c(/養老給付_年金給付金額/);
+    add({ id: 'gei', tab: 'fund', title: '公教人員保險養老給付', sub: '人數：人；金額：億元', unit: '人',
+      src: '銓敘部「公教人員保險現金給付統計」（data.gov.tw 165685）。',
+      table: { columns: ['年度(民國)', '一次養老給付人數', '年金養老給付人數', '一次養老給付金額(億元)', '年金養老給付金額(億元)'],
+        rows: g.rows.map(r => [r[0] + '年', num(r[i1]), num(r[i3]), yi(num(r[i2])), yi(num(r[i4]))]) },
+      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }] } }); }
+
+  /* --- 國發會 cross-scheme --- */
+  const ndc = (key, id, title, sub, unit, srcText) => { const t = tables(key)[0]; if (!t) return;
+    const cols = t.header.map((h, i) => i === 0 ? '年度' : h.replace(/\[.*?\]/g, '').trim());
+    add({ id, tab: 'fund', title, sub, unit, src: srcText,
+      table: { columns: cols, rows: t.rows.map(r => [String(r[0]), ...r.slice(1, cols.length).map(num)]) },
+      chart: { type: 'line', series: cols.slice(1).map((_, i) => ({ col: i + 1 })) } }); };
+  ndc('ndc_fund_size', 'ndc_size', '各職業退休金制度基金規模', '單位：億元', '億元', '國家發展委員會「近年職業別退休金基金運用規模」（data.gov.tw 157823）。');
+  ndc('ndc_members', 'ndc_mem', '各職業退休金制度參加人數', '單位：人', '人', '國家發展委員會「近年職業別退休金參加人數」（data.gov.tw 144990）。');
+  ndc('ndc_recipients', 'ndc_rec', '各職業退休金制度年金領取人數', '單位：人', '人', '國家發展委員會「近年各職業退休金制度領取人數－年金」（data.gov.tw 170821）。');
+  ndc('ndc_annuity', 'ndc_ann', '各社會保險老年年金給付領取人數', '單位：人', '人', '國家發展委員會「近年各社會保險老年給付領取人數－年金」（data.gov.tw 165282）。');
+
+  /* ================= 社會保險費率與津貼 ================= */
+  const np = tables('np_rate')[0];
+  if (np) add({ id: 'np_rate', tab: 'ins', title: '國民年金歷年保險費率與月投保金額', sub: '費率：%；金額：元', unit: '%',
+    src: '勞保局「國民年金歷年月投保金額、保險費率及被保險人每月自付保險費金額」（data.gov.tw 36841）。',
+    table: { columns: ['保費年月起(民國)', '保費年月迄(民國)', '保險費率(%)', '月投保金額(元)', '一般民眾每月自付(元)'],
+      rows: np.rows.map(r => [r[0], r[1] || '迄今', r2(num(r[3]) * 100, 2), num(r[2]), num(r[4])]) },
+    chart: { type: 'line', series: [{ col: 2 }], step: true } });
+  const ad = tables('np_addon')[0];
+  if (ad) add({ id: 'np_addon', tab: 'ins', title: '國保老年年金加計金額（老年基本保證年金月額）', sub: '單位：元／月', unit: '元',
+    src: '勞保局「國民年金歷年老年年金給付加計金額」（data.gov.tw 164025）；老年基本保證年金、原住民給付月額同此金額。',
+    table: { columns: ['適用起(西元年月)', '適用迄', '加計金額(元)'], rows: ad.rows.map(r => [isoYM(r[1]) ? isoYM(r[1]).iso : r[1], r[2] ? (isoYM(r[2]) ? isoYM(r[2]).iso : r[2]) : '迄今', num(r[3])]) },
+    chart: { type: 'col', series: [{ col: 2 }] } });
+  const nb = tables('np_basic')[0];
+  if (nb) { const h = nb.header, ia = col(h, /^給付金額/), ic = col(h, /續發案給付件數/); const m = {};
+    nb.rows.forEach(r => { const ym = rocYM(r[0]); if (!ym) return; const o = m[ym.key] = m[ym.key] || { ym };
+      if (/老年基本保證/.test(r[1])) { o.a = yi(num(r[ia])); o.ac = num(r[ic]); } else if (/原住民/.test(r[1])) { o.b = yi(num(r[ia])); o.bc = num(r[ic]); } });
+    const ks = Object.keys(m).map(Number).sort();
+    add({ id: 'np_basic', tab: 'ins', title: '國保老年基本保證年金與原住民給付', sub: '金額：億元／月；件數：續發案件數', unit: '億元',
+      src: '勞保局「國民年金老年基本保證年金及原住民給付每月核定案件及給付金額統計資料」（data.gov.tw 13347）。',
+      table: { columns: ['核定年月(民國)', '老年基本保證年金給付金額', '原住民給付金額', '老年基本保證年金續發件數', '原住民給付續發件數'], rows: ks.map(k => [m[k].ym.roc, m[k].a ?? null, m[k].b ?? null, m[k].ac ?? null, m[k].bc ?? null]) },
+      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }] } }); }
+  /* --- average monthly old-age benefits --- */
+  const nbf = tables('np_benefit')[0]; D._npAvg = null;
+  if (nbf) { const h = nbf.header, c = re => col(h, re);
+    const iAc = c(/^續發案給付件數A式/), iBc = c(/^續發案給付件數B式/), iAa = c(/^續發案給付金額A式/), iBa = c(/^續發案給付金額B式/); const m = {};
+    nbf.rows.forEach(r => { if (!/^老年年金給付/.test(r[1])) return; const ym = rocYM(r[0]); if (!ym) return;
+      const ac = num(r[iAc]) || 0, bc = num(r[iBc]) || 0, aa = num(r[iAa]) || 0, ba = num(r[iBa]) || 0;
+      m[ym.key] = [ym.roc, ac ? Math.round(aa / ac) : null, bc ? Math.round(ba / bc) : null, ac + bc ? Math.round((aa + ba) / (ac + bc)) : null, ac + bc]; });
+    const rows = Object.keys(m).map(Number).sort().map(k => m[k]); D._npAvg = rows[rows.length - 1] || null;
+    add({ id: 'np_avg', tab: 'ins', title: '國保老年年金平均月領金額', sub: '單位：元；續發案給付金額 ÷ 續發案件數', unit: '元',
+      src: '勞保局「國民年金保險各項年金給付每月核定案件及給付金額統計資料」（data.gov.tw 13348）。此資料集只提供最新月份，每次一鍵更新會累積到本機，月份會逐次增加。A 式＝基本給付＋加計金額，B 式＝依投保年資計算。',
+      table: { columns: ['核定年月(民國)', 'A式平均月領', 'B式平均月領', '整體平均月領', '續發件數'], rows },
+      chart: { type: rows.length > 1 ? 'line' : 'col', series: [{ col: 1 }, { col: 2 }, { col: 3 }] } }); }
+  const lav = manualTable('li_old_age_avg');
+  if (lav) add({ id: 'li_avg', tab: 'ins', title: '勞保老年年金平均月領金額（人工確認）', sub: '單位：元；狀態：' + lav.status, unit: '元', manual: true,
+    src: '人工維護資料（人工確認參數頁）；開放平台無勞保年金平均給付額資料集。',
+    table: { columns: lav.columns, rows: lav.rows.map(r => [String(r[0]), num(r[1]), num(r[2])]) },
+    chart: { type: 'col', series: [{ col: 1 }] } });
+  { const rows = []; const mi = id => manualItem(id) || {};
+    const la = lav && [...lav.rows].reverse().find(r => num(r[1]) != null);
+    if (la) rows.push(['勞保老年年金平均（人工確認）', num(la[1]), la[0] + ' 年', '人工確認：' + lav.status]);
+    if (D._npAvg) { rows.push(['國保老年年金平均（A式）', D._npAvg[1], D._npAvg[0], '13348']); rows.push(['國保老年年金平均（B式）', D._npAvg[2], D._npAvg[0], '13348']); }
+    const adl = ad && ad.rows[ad.rows.length - 1]; if (adl) rows.push(['國保老年基本保證年金', num(adl[3]), '現行', '164025']);
+    if (num(mi('farmer_full').value) != null) rows.push(['老農津貼（全額，人工確認）', num(mi('farmer_full').value), mi('farmer_full').effective || '現行', '人工確認：' + mi('farmer_full').status]);
+    if (num(mi('civil_pension_avg').value) != null) rows.push(['公務人員月退休所得平均（人工確認）', num(mi('civil_pension_avg').value), mi('civil_pension_avg').effective || '', '人工確認：' + mi('civil_pension_avg').status]);
+    rows.sort((a, b) => b[1] - a[1]);
+    add({ id: 'old_age_cmp', tab: 'ins', title: '各制度老年給付月額比較', sub: '單位：元／月；各項資料期不同，請參考表內「資料期」', unit: '元', wide: true,
+      src: '自動資料：data.gov.tw 13348、164025；人工確認資料見「人工確認參數」頁（公務人員月退休所得平均填入後才會出現）。',
+      table: { columns: ['項目', '月額(元)', '資料期', '來源'], rows }, chart: { type: 'barh', series: [{ col: 1 }] } }); }
+
+  /* --- 公保費率 (臺灣銀行, via data.gov.tw copy) --- */
+  const gr = tables('gei_rate')[0]; D._gei = null;
+  if (gr) { const h = gr.header, ir = col(h, /保險費率/), is = col(h, /分擔/), ik = col(h, /保險種類/);
+    const g = gr.rows.find(r => /公教人員保險/.test(r[ik])); const rows = [];
+    if (g) { const t = g[ir] || ''; const pick = re => { const m = t.match(re); return m ? num(m[1]) : null; };
+      const lab = [['一般費率', /一般費率[：:]\s*([\d.]+)%/], ['基本年金費率（上限35年）', /基本年金費率\(上限35年\)[：:]\s*([\d.]+)%/], ['基本年金費率（上限40年）', /基本年金費率\(上限40年\)[：:]\s*([\d.]+)%/],
+        ['全額年金費率（上限35年）', /全額年金費率\(上限35年\)[：:]\s*([\d.]+)%/], ['全額年金費率（上限40年）', /全額年金費率\(上限40年\)[：:]\s*([\d.]+)%/]];
+      lab.forEach(([n, re]) => rows.push([n, pick(re)]));
+      const lo = pick(/保俸\s*([\d.]+)%至/), hi = pick(/至\s*([\d.]+)%/);
+      D._gei = { general: rows[0][1], range: lo != null ? `${lo}%–${hi}%` : '', share: (g[is] || '').split(/\n/)[0] }; }
+    const rr = gr.rows.find(r => /退休人員保險/.test(r[ik])); if (rr) rows.push(['退休人員保險', num(String(rr[ir]).replace('%', ''))]);
+    const via = (gr.item.via === 'mirror') ? '（臺灣銀行原始網址有機器人驗證，自動改用 data.gov.tw 平台轉檔副本，非即時）' : '';
+    add({ id: 'gei_rate', tab: 'ins', title: '公教人員保險費率', sub: '單位：%（占保俸）' + (D._gei && D._gei.range ? `；法定區間 ${D._gei.range}` : ''), unit: '%',
+      src: '臺灣銀行「臺灣銀行公保保險種類」（data.gov.tw 31986）' + via + (D._gei && D._gei.share ? '。分擔：' + D._gei.share : ''),
+      table: { columns: ['費率項目', '費率(%)'], rows: rows.filter(r => r[1] != null) }, chart: { type: 'barh', series: [{ col: 1 }] } }); }
+
+  const lg = tables('li_grade')[0];
+  if (lg) { const per = []; const idx = {};
+    lg.rows.forEach(r => { const p = r[2]; const v = num(r[3]); if (v == null) return; if (!(p in idx)) { idx[p] = per.length; per.push({ p, min: v, max: v, n: 0 }); } const o = per[idx[p]]; o.min = Math.min(o.min, v); o.max = Math.max(o.max, v); o.n++; });
+    add({ id: 'li_grade', tab: 'ins', title: '勞工保險月投保薪資上下限沿革', sub: '單位：元；民國 97 年以後', unit: '元',
+      src: '勞動部「歷年勞工保險投保薪資分級表」（data.gov.tw 45940）。',
+      table: { columns: ['適用期間', '最低級(元)', '最高級(元)', '級數'], rows: per.filter(o => +(o.p.match(/^(\d+)/) || [0, 0])[1] >= 97).map(o => [o.p, o.min, o.max, o.n]) },
+      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }], step: true } }); }
+  const ls = tables('li_share')[0];
+  if (ls) add({ id: 'li_share', tab: 'ins', title: '現行勞保、就保保險費分擔金額表', sub: '單位：元／月；依現行費率計算', unit: '元',
+    src: '勞動部「勞就保保險費分擔金額表」（data.gov.tw 6259）。',
+    table: { columns: ['月投保薪資(元)', '勞保普通費率', '就保費率', '勞工負擔(元)', '投保單位負擔(元)'], rows: ls.rows.map(r => [String(num(r[3])), r[1], r[2], num(r[4]), num(r[5])]) },
+    chart: { type: 'line', series: [{ col: 3 }, { col: 4 }] } });
+
+  const hist = manualTable('li_rate_history');
+  if (hist) add({ id: 'li_rate_hist', tab: 'ins', title: '勞工保險費率沿革（人工確認）', sub: '單位：%；狀態：' + hist.status, unit: '%', manual: true,
+    src: '人工維護資料（人工確認參數頁）；開放平台僅提供現行費率。',
+    table: { columns: hist.columns, rows: hist.rows.map(r => [r[0], num(r[1]), num(r[2]), num(r[3])]) },
+    chart: { type: 'line', series: [{ col: 1 }, { col: 3 }], step: true } });
+
+  const fm = tables('farmer')[0];
+  if (fm) { const h = fm.header, cy = col(h, /年度/), cc = col(h, /縣市/), ca = col(h, /年齡/), cs = col(h, /性別/), ct = col(h, /身分/), cn = col(h, /人數/);
+    const cty = {}, age = {}; let year = '', tot = 0;
+    fm.rows.forEach(r => { const n = num(r[cn]) || 0; year = r[cy]; tot += n; const c = COUNTY[+r[cc]] || r[cc];
+      const o = cty[c] = cty[c] || [0, 0]; o[+r[ct] === 2 ? 1 : 0] += n;
+      const a = age[r[ca]] = age[r[ca]] || [0, 0]; a[+r[cs] === 2 ? 1 : 0] += n; });
+    D._farmer = { year, tot };
+    add({ id: 'farmer_cty', tab: 'ins', title: `老農津貼核付人數－依縣市（${year} 年）`, sub: '單位：人', unit: '人', tall: true,
+      src: '勞保局「老年農民福利津貼核付人數表」（data.gov.tw 17341）。',
+      table: { columns: ['縣市', '合計', '農民', '漁民'], rows: Object.entries(cty).map(([c, v]) => [c, v[0] + v[1], v[0], v[1]]).sort((a, b) => b[1] - a[1]) },
+      chart: { type: 'barh', series: [{ col: 1 }] } });
+    add({ id: 'farmer_age', tab: 'ins', title: `老農津貼核付人數－依年齡與性別（${year} 年）`, sub: '單位：人', unit: '人',
+      src: '同上。',
+      table: { columns: ['年齡組', '男', '女'], rows: Object.keys(age).sort().map(k => [AGEG[k] || k, age[k][0], age[k][1]]) },
+      chart: { type: 'col', series: [{ col: 1 }, { col: 2 }] } }); }
+}
+const COUNTY = { 9007: '連江縣', 9020: '金門縣', 10002: '宜蘭縣', 10004: '新竹縣', 10005: '苗栗縣', 10007: '彰化縣', 10008: '南投縣', 10009: '雲林縣', 10010: '嘉義縣', 10013: '屏東縣', 10014: '臺東縣', 10015: '花蓮縣', 10016: '澎湖縣', 10017: '基隆市', 10018: '新竹市', 10020: '嘉義市', 63000: '臺北市', 64000: '高雄市', 65000: '新北市', 66000: '臺中市', 67000: '臺南市', 68000: '桃園市' };
+const AGEG = { 1: '65-69歲', 2: '70-74歲', 3: '75-79歲', 4: '80-84歲', 5: '85-89歲', 6: '90歲以上' };
+
+/* ---------------- OECD ---------------- */
+const CN = { AUS: '澳洲', AUT: '奧地利', BEL: '比利時', CAN: '加拿大', CHL: '智利', COL: '哥倫比亞', CRI: '哥斯大黎加', CZE: '捷克', DNK: '丹麥', EST: '愛沙尼亞', FIN: '芬蘭', FRA: '法國', DEU: '德國', GRC: '希臘', HUN: '匈牙利', ISL: '冰島', IRL: '愛爾蘭', ISR: '以色列', ITA: '義大利', JPN: '日本', KOR: '韓國', LVA: '拉脫維亞', LTU: '立陶宛', LUX: '盧森堡', MEX: '墨西哥', NLD: '荷蘭', NZL: '紐西蘭', NOR: '挪威', POL: '波蘭', PRT: '葡萄牙', SVK: '斯洛伐克', SVN: '斯洛維尼亞', ESP: '西班牙', SWE: '瑞典', CHE: '瑞士', TUR: '土耳其', GBR: '英國', USA: '美國', EU27: '歐盟27國', EU27_2020: '歐盟27國', OECD_REP: 'OECD平均', OECD: 'OECD平均', ARG: '阿根廷', BRA: '巴西', BGR: '保加利亞', CHN: '中國大陸', HRV: '克羅埃西亞', CYP: '賽普勒斯', IND: '印度', IDN: '印尼', MLT: '馬爾他', ROU: '羅馬尼亞', RUS: '俄羅斯', SAU: '沙烏地阿拉伯', ZAF: '南非', PER: '秘魯', HKG: '香港', SGP: '新加坡', MYS: '馬來西亞', THA: '泰國', PHL: '菲律賓', KAZ: '哈薩克' };
+const isAvg = a => a === 'OECD' || a === 'OECD_REP';
+const PICK_COUNTRIES = ['OECD', 'JPN', 'KOR', 'USA', 'DEU', 'GBR', 'FRA', 'CAN', 'AUS', 'NLD', 'SWE', 'CHE', 'NZL', 'DNK', 'NOR', 'ITA', 'ESP', 'CHL', 'MEX'];
+let selected = ['OECD', 'JPN', 'KOR', 'USA', 'DEU', 'GBR'];
+try { const s = JSON.parse(localStorage.getItem('pension-oecd-sel') || 'null'); if (Array.isArray(s) && s.length) selected = s; } catch (e) {}
+const normA = a => isAvg(a) ? 'OECD' : a;
+
+let OE = null;
+function oecdRows(key) {
+  const t = tables(key)[0]; if (!t) return [];
+  const h = t.header, ix = {}; h.forEach((name, i) => { if (!(name in ix)) ix[name] = i; });
+  return t.rows.map(r => { const o = {}; for (const k in ix) o[k] = r[ix[k]]; o.v = num(o.OBS_VALUE); o.y = +o.TIME_PERIOD; o.A = normA(o.REF_AREA); o.name = CN[o.REF_AREA] || o['Reference area'] || o.REF_AREA; return o; }).filter(o => o.v != null);
+}
+/** keep, per country, only rows whose dims match the most-preferred available value */
+function prefer(rows, prefs) {
+  const by = {}; rows.forEach(r => (by[r.A] = by[r.A] || []).push(r));
+  const out = [];
+  for (const a in by) { let rs = by[a];
+    for (const d in prefs) { const best = prefs[d].find(v => rs.some(r => r[d] === v)); if (best != null) rs = rs.filter(r => r[d] === best); }
+    out.push(...rs); }
+  return out;
+}
+function latest(rows) { const m = {}; rows.forEach(r => { if (!m[r.A] || r.y > m[r.A].y) m[r.A] = r; }); return Object.values(m); }
+
+function buildOECD() {
+  const pag = oecdRows('oecd_pag'), socx = oecdRows('oecd_socx'), pa = oecdRows('oecd_pa');
+  const M = code => pag.filter(r => r.MEASURE === code);
+  const yrs = rs => { const ys = [...new Set(rs.map(r => r.y))].sort(); return ys.length ? (ys[0] === ys[ys.length - 1] ? ys[0] : ys[0] + '–' + ys[ys.length - 1]) : ''; };
+  const S = { SEX: ['M', '_T', '_Z'], OPTIONALITY: ['M', '_Z', 'MV'], AGE: ['_Z', '_T'] };
+
+  // replacement rates (gross/net), latest
+  const g = latest(prefer(M('GPRR100'), S)), n = latest(prefer(M('NPRR100'), S));
+  const nm = {}; n.forEach(r => nm[r.A] = r);
+  const rr = g.map(r => [r.name, r.v, nm[r.A] ? nm[r.A].v : null, r.A, r.y]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1));
+  add({ id: 'o_rr', tab: 'oecd', title: '所得替代率（平均工資者）', sub: `單位：%；強制性制度、男性、22 歲入職之完整職涯；資料年 ${yrs(g)}`, unit: '%', tall: true, codes: rr.map(r => r[3]),
+    src: 'OECD Pensions at a Glance（DSD_PAG@DF_PAG：GPRR100、NPRR100）。',
+    table: { columns: ['國家', '毛所得替代率', '淨所得替代率'], rows: rr.map(r => r.slice(0, 3)) },
+    chart: { type: 'barh', series: [{ col: 1 }, { col: 2 }] } });
+
+  const c1 = latest(prefer(M('CRPLF22'), S)), f1 = latest(prefer(M('FRPLF22'), S)); const fm = {}; f1.forEach(r => fm[r.A] = r);
+  const ra = c1.map(r => [r.name, r.v, fm[r.A] ? fm[r.A].v : null, r.A]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1));
+  add({ id: 'o_age', tab: 'oecd', title: '法定退休年齡：現行與未來', sub: `單位：歲；22 歲進入勞動市場之男性；資料年 ${yrs(c1)}`, unit: '歲', tall: true, codes: ra.map(r => r[3]),
+    src: 'OECD Pensions at a Glance（CRPLF22、FRPLF22）。',
+    table: { columns: ['國家', '現行退休年齡', '未來退休年齡'], rows: ra.map(r => r.slice(0, 3)) },
+    chart: { type: 'barh', series: [{ col: 1 }, { col: 2 }], min: 55 } });
+
+  ['M', 'F'].forEach(sx => {
+    const rs = M('ELMEA').filter(r => r.SEX === sx);
+    const ys = [...new Set(rs.map(r => r.y))].sort();
+    const sel = selected.filter(a => rs.some(r => r.A === a));
+    add({ id: 'o_exit_' + sx, tab: 'oecd', title: `實際退出勞動市場平均年齡（${sx === 'M' ? '男性' : '女性'}）`, sub: '單位：歲；依上方勾選國家', unit: '歲',
+      src: 'OECD Pensions at a Glance（ELMEA，effective labour market exit age）。',
+      table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = rs.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
+      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), colorKeys: sel } });
+  });
+
+  const pov = latest(prefer(M('OAIP'), { AGE: ['Y_GE66', '_T'], SEX: ['_T', '_Z'] })).sort((a, b) => b.v - a.v);
+  add({ id: 'o_pov', tab: 'oecd', title: '老年所得貧窮率（66 歲以上）', sub: '單位：%；可支配所得低於中位數 50% 之比率；各國最新年', unit: '%', tall: true, codes: pov.map(r => r.A),
+    src: 'OECD Pensions at a Glance（OAIP）。',
+    table: { columns: ['國家', '貧窮率', '資料年'], rows: pov.map(r => [r.name, r.v, String(r.y)]) },
+    chart: { type: 'barh', series: [{ col: 1 }] } });
+
+  const pep = latest(M('PEP')).sort((a, b) => b.v - a.v);
+  add({ id: 'o_pep', tab: 'oecd', title: '公共年金支出占 GDP', sub: '單位：%；各國最新年', unit: '%', tall: true, codes: pep.map(r => r.A),
+    src: 'OECD Pensions at a Glance（PEP）。',
+    table: { columns: ['國家', '占GDP比率', '資料年'], rows: pep.map(r => [r.name, r.v, String(r.y)]) },
+    chart: { type: 'barh', series: [{ col: 1 }] } });
+
+  { const ys = [...new Set(socx.map(r => r.y))].sort(); const sel = selected.filter(a => socx.some(r => r.A === a));
+    add({ id: 'o_socx', tab: 'oecd', title: '老年及遺屬現金給付公共支出占 GDP', sub: '單位：%；依上方勾選國家', unit: '%',
+      src: 'OECD Social Expenditure Database（DSD_SOCX_AGG@DF_PUB_OLD）。',
+      table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = socx.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
+      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), colorKeys: sel } }); }
+
+  { const tot = pa.filter(r => r.VEHICLE_TYPE === '_T'); const lt = latest(tot).sort((a, b) => b.v - a.v);
+    add({ id: 'o_pa', tab: 'oecd', title: '退休準備資產占 GDP', sub: '單位：%；所有提存準備制退休金工具合計；各國最新年', unit: '%', tall: true, codes: lt.map(r => r.A),
+      src: 'OECD Global Pension Statistics（DSD_FP@DF_PA，VEHICLE_TYPE=_T）。',
+      table: { columns: ['國家', '占GDP比率', '資料年'], rows: lt.map(r => [r.name, r.v, String(r.y)]) },
+      chart: { type: 'barh', series: [{ col: 1 }] } }); }
+  OE = { pag, socx, pa };
+}
+
+/* ---------------- manual parameters ---------------- */
+const MKEY = 'pension-manual-v1';
+let MAN = null;
+function loadManual() {
+  const base = JSON.parse(JSON.stringify((D && D.manual) || { items: [], tables: [] }));
+  try { const s = JSON.parse(localStorage.getItem(MKEY) || 'null');
+    if (s) { (s.items || []).forEach(x => { const t = base.items.find(i => i.id === x.id); if (t) Object.assign(t, x); });
+      (s.tables || []).forEach(x => { const t = base.tables.find(i => i.id === x.id); if (t) Object.assign(t, x); }); } } catch (e) {}
+  MAN = base;
+}
+function saveManual() {
+  try { localStorage.setItem(MKEY, JSON.stringify({ items: MAN.items.map(i => ({ id: i.id, value: i.value, effective: i.effective, status: i.status, confirmedAt: i.confirmedAt, confirmedBy: i.confirmedBy, note: i.note })),
+    tables: MAN.tables.map(t => ({ id: t.id, rows: t.rows, status: t.status, confirmedAt: t.confirmedAt, confirmedBy: t.confirmedBy })) }));
+    document.getElementById('mSaved').textContent = '已儲存於本機瀏覽器 ' + new Date().toLocaleTimeString('zh-TW'); } catch (e) { document.getElementById('mSaved').textContent = '瀏覽器無法儲存，請改用「匯出確認結果」'; }
+}
+const manualItem = id => MAN && MAN.items.find(i => i.id === id);
+const manualTable = id => MAN && MAN.tables.find(i => i.id === id);
+function statusBadge(st) {
+  const map = { '已確認': ['var(--good)', '✓'], '需修正': ['var(--critical)', '!'], '待確認': ['var(--warning)', '?'] };
+  const m = map[st] || map['待確認'];
+  return `<span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${esc(st || '待確認')}</span>`;
+}
+function renderManual() {
+  const root = document.getElementById('manual-root');
+  const rows = MAN.items.map((it, i) => `<tr>
+    <td class="txt"><b>${esc(it.name)}</b><br><span class="meta">${esc(it.group)}</span></td>
+    <td><input data-i="${i}" data-f="value" value="${esc(it.value)}" aria-label="${esc(it.name)} 數值"><div class="meta">${esc(it.unit)}</div></td>
+    <td><input data-i="${i}" data-f="effective" value="${esc(it.effective)}" placeholder="民國年-月-日"></td>
+    <td><select data-i="${i}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === it.status ? ' selected' : ''}>${s}</option>`).join('')}</select><div style="margin-top:4px">${statusBadge(it.status)}</div></td>
+    <td><input data-i="${i}" data-f="confirmedAt" value="${esc(it.confirmedAt || '')}" placeholder="確認日期"><input data-i="${i}" data-f="confirmedBy" value="${esc(it.confirmedBy || '')}" placeholder="確認人" style="margin-top:4px"></td>
+    <td><textarea data-i="${i}" data-f="note">${esc(it.note)}</textarea></td>
+    <td class="path">${esc(it.path)}<br>${(it.links || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('　')}</td></tr>`).join('');
+  let html = `<div class="card wide"><h3>單一參數</h3><div class="table-scroll manual-table" style="max-height:none"><table>
+    <thead><tr><th class="txt">項目</th><th class="txt">數值</th><th class="txt">生效日期</th><th class="txt">狀態</th><th class="txt">確認日期／確認人</th><th class="txt">備註</th><th class="txt">確認路徑</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  MAN.tables.forEach((t, ti) => {
+    html += `<div class="card wide" style="margin-top:16px"><div class="card-head"><div><h3>${esc(t.name)}</h3><div class="sub">${esc(t.note)}</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-addrow="${ti}">新增一列</button></div></div>
+      <div class="toolbar"><label>狀態 <select data-t="${ti}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === t.status ? ' selected' : ''}>${s}</option>`).join('')}</select></label> ${statusBadge(t.status)}
+      <label>確認日期 <input data-t="${ti}" data-f="confirmedAt" value="${esc(t.confirmedAt || '')}" style="width:130px"></label>
+      <label>確認人 <input data-t="${ti}" data-f="confirmedBy" value="${esc(t.confirmedBy || '')}" style="width:110px"></label></div>
+      <div class="sub">確認路徑：${esc(t.path)} ${(t.links || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('　')}</div>
+      <div class="table-scroll manual-table"><table><thead><tr>${t.columns.map(c => `<th class="txt">${esc(c)}</th>`).join('')}<th></th></tr></thead><tbody>
+      ${t.rows.map((r, ri) => `<tr>${r.map((v, ci) => `<td><input data-t="${ti}" data-r="${ri}" data-c="${ci}" value="${esc(v)}"></td>`).join('')}<td><button class="btn" data-delrow="${ti}:${ri}" title="刪除此列">刪除</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  });
+  root.innerHTML = html;
+}
+function onManualInput(e) {
+  const el = e.target; if (!el.dataset) return;
+  if (el.dataset.i != null) { MAN.items[+el.dataset.i][el.dataset.f] = el.value; }
+  else if (el.dataset.t != null && el.dataset.r != null) { MAN.tables[+el.dataset.t].rows[+el.dataset.r][+el.dataset.c] = el.value; }
+  else if (el.dataset.t != null && el.dataset.f) { MAN.tables[+el.dataset.t][el.dataset.f] = el.value; }
+  else return;
+  saveManual();
+  if (el.tagName === 'SELECT') renderManual();
+  dirtyDomestic = true;
+}
+
+/* ---------------- charts ---------------- */
+const charts = {};
+const rendered = {};
+let dirtyDomestic = false;
+function colorFor(p, i) {
+  const pal = SERIES();
+  if (p.chart.colorKeys) { const k = p.chart.colorKeys[i]; const order = PICK_COUNTRIES; const j = order.indexOf(k); return pal[(j >= 0 ? j : i) % 8]; }
+  return pal[i % 8];
+}
+function chartConfig(p) {
+  const c = p.chart, T = p.table, cat = T.rows.map(r => String(r[0]));
+  const ink = cssv('--text-secondary'), grid = cssv('--grid'), axis = cssv('--axis'), surf = cssv('--surface-1');
+  const horiz = c.type === 'barh';
+  const ds = c.series.map((s, i) => {
+    const color = colorFor(p, i);
+    const base = { label: s.name || T.columns[s.col], data: T.rows.map(r => r[s.col] ?? null) };
+    if (c.type === 'line') return Object.assign(base, { borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: T.rows.length <= 16 ? 3 : 0, pointHoverRadius: 5, pointBorderColor: surf, pointBorderWidth: 2, tension: 0, stepped: c.step ? 'before' : false, spanGaps: true });
+    let bg = color;
+    if (horiz && c.series.length === 1 && p.codes) bg = p.codes.map(a => isAvg(a) || a === 'OECD' ? cssv('--text-secondary') : color);
+    return Object.assign(base, { backgroundColor: bg, borderColor: surf, borderWidth: c.type === 'colStacked' ? { top: 2 } : 0, borderRadius: c.type === 'colStacked' ? 0 : 4, borderSkipped: 'start', maxBarThickness: 28 });
+  });
+  const valAxis = { grid: { color: grid }, border: { color: axis }, ticks: { color: ink, callback: v => fmt(v) }, stacked: c.type === 'colStacked', beginAtZero: c.type !== 'line' && c.min == null, min: c.min };
+  const catAxis = { grid: { display: false }, border: { color: axis }, stacked: c.type === 'colStacked',
+    ticks: { color: ink, autoSkip: !horiz, maxRotation: 0, font: horiz && p.codes ? (ctx => ({ weight: selected.includes(normA(p.codes[ctx.index])) ? 'bold' : 'normal' })) : undefined } };
+  return {
+    type: c.type === 'line' ? 'line' : 'bar',
+    data: { labels: cat, datasets: ds },
+    options: {
+      indexAxis: horiz ? 'y' : 'x', responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false, axis: horiz ? 'y' : 'x' },
+      plugins: {
+        legend: { display: ds.length > 1, position: 'bottom', labels: { color: ink, usePointStyle: true, pointStyle: c.type === 'line' ? 'line' : 'rectRounded', boxWidth: 18 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed[horiz ? 'x' : 'y'])} ${p.unit || ''}` } }
+      },
+      scales: horiz ? { x: valAxis, y: catAxis } : { x: catAxis, y: valAxis }
+    }
+  };
+}
+function tableHTML(T) {
+  return `<table><thead><tr>${T.columns.map((c, i) => `<th class="${i ? '' : 'txt'}">${esc(c)}</th>`).join('')}</tr></thead><tbody>${T.rows.map(r => `<tr>${r.map((v, i) => `<td class="${typeof v === 'number' ? '' : 'txt'}">${esc(fmt(v))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function cardHTML(p) {
+  const h = p.tall ? Math.max(300, p.table.rows.length * (p.chart.series.length > 1 ? 22 : 16) + 60) : 300;
+  return `<article class="card${p.tall || p.wide ? ' wide' : ''}" id="card-${p.id}">
+    <div class="card-head"><div><h3>${esc(p.title)}</h3><div class="sub">${esc(p.sub || '')}</div></div>
+    <button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button></div>
+    ${p.table.rows.length ? `<div class="chart-box" style="height:${h}px"><canvas id="cv-${p.id}" role="img" aria-label="${esc(p.title)}"></canvas></div>` : '<div class="empty">此來源目前沒有資料</div>'}
+    <details class="tbl"><summary>顯示資料表（${p.table.rows.length} 列）</summary><div class="table-scroll">${tableHTML(p.table)}</div></details>
+    <div class="src">資料來源：${esc(p.src)}</div></article>`;
+}
+function renderTab(tab, force) {
+  if (rendered[tab] && !force) return;
+  const grid = document.getElementById('grid-' + tab); if (!grid) return;
+  P.filter(p => p.tab === tab).forEach(p => { if (charts[p.id]) { charts[p.id].destroy(); delete charts[p.id]; } });
+  grid.innerHTML = P.filter(p => p.tab === tab).map(cardHTML).join('');
+  P.filter(p => p.tab === tab && p.table.rows.length).forEach(p => { charts[p.id] = new Chart(document.getElementById('cv-' + p.id), chartConfig(p)); });
+  rendered[tab] = true;
+}
+function rebuildAll() { P.length = 0; buildDomestic(); buildOECD(); }
+
+/* ---------------- KPIs ---------------- */
+function kpi(label, value, note, badge) { return `<div class="kpi"><div class="k-label">${esc(label)} ${badge || ''}</div><div class="k-value">${value}</div><div class="k-note">${note || ''}</div></div>`; }
+function renderKPIs() {
+  const f = D._fundLatest; const fr = P.find(p => p.id === 'fund_mem'); const lastMem = fr && fr.table.rows[fr.table.rows.length - 1];
+  const fl = P.find(p => p.id === 'fund_flow'); const lastFl = fl && fl.table.rows[fl.table.rows.length - 1];
+  const mi = id => manualItem(id) || {};
+  document.getElementById('kpi-fund').innerHTML =
+    (f ? kpi('退撫基金運用結餘', fmt(f.fs, 0) + ' <small>億元</small>', `民國 ${f.ym.roc} 月底`) : '') +
+    (f ? kpi('退撫基金本年累計收益率', fmt(f.f) + '<small>%</small>', `民國 ${f.ym.roc} 止`) : '') +
+    (lastMem ? kpi('退撫基金參加人數', fmt(lastMem[4], 0) + ' <small>人</small>', `公 ${fmt(lastMem[1], 0)}／教 ${fmt(lastMem[2], 0)}／軍 ${fmt(lastMem[3], 0)}（${lastMem[0]}）`) : '') +
+    (lastFl ? kpi('累計收繳減撥付', fmt(lastFl[3], 0) + ' <small>億元</small>', `收繳 ${fmt(lastFl[1], 0)}／撥付 ${fmt(lastFl[2], 0)}（${lastFl[0]}）`) : '') +
+    kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', '人工確認參數；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）', statusBadge(mi('fund_rate_civil').status));
+  const la = P.find(p => p.id === 'li_avg'); const liAvg = la && [...la.table.rows].reverse().find(r => r[1] != null);
+  const lg = P.find(p => p.id === 'li_grade'); const lgl = lg && lg.table.rows[lg.table.rows.length - 1];
+  const np = P.find(p => p.id === 'np_rate'); const npl = np && np.table.rows[np.table.rows.length - 1];
+  const ad = P.find(p => p.id === 'np_addon'); const adl = ad && ad.table.rows[ad.table.rows.length - 1];
+  document.getElementById('kpi-ins').innerHTML =
+    (liAvg ? kpi('勞保老年年金平均月領', fmt(liAvg[1], 0) + ' <small>元</small>', liAvg[0] + ' 年；人工確認參數', statusBadge((manualTable('li_old_age_avg') || {}).status)) : '') +
+    (D._gei && D._gei.general != null ? kpi('公保一般費率', fmt(D._gei.general) + '<small>%</small>', '占保俸；法定區間 ' + esc(D._gei.range) + '；資料集 31986') : '') +
+    (D._npAvg ? kpi('國保老年年金平均月領', fmt(D._npAvg[3], 0) + ' <small>元</small>', `A 式 ${fmt(D._npAvg[1], 0)}／B 式 ${fmt(D._npAvg[2], 0)}（${D._npAvg[0]}）`) : '') +
+    (lgl ? kpi('勞保月投保薪資上下限', fmt(lgl[1], 0) + '–' + fmt(lgl[2], 0), esc(lgl[0]) + '，' + lgl[3] + ' 級') : '') +
+    (npl ? kpi('國民年金保險費率', fmt(npl[2]) + '<small>%</small>', '月投保金額 ' + fmt(npl[3], 0) + ' 元（' + esc(npl[0]) + ' 起）') : '') +
+    (adl ? kpi('老年基本保證年金月額', fmt(adl[2], 0) + ' <small>元</small>', '同國保老年年金 A 式加計金額，' + esc(adl[0]) + ' 起') : '') +
+    kpi('老農津貼月額（全額）', fmt(num(mi('farmer_full').value), 0) + ' <small>元</small>', '人工確認參數；半額 ' + fmt(num(mi('farmer_half').value), 0) + ' 元', statusBadge(mi('farmer_full').status)) +
+    (D._farmer ? kpi('老農津貼核付人數', fmt(D._farmer.tot, 0) + ' <small>人</small>', D._farmer.year + ' 年；資料集 17341') : '');
+}
+
+/* ---------------- sources tab ---------------- */
+function renderSources() {
+  const st = { ok: ['var(--good)', '✓', '已更新'], cached: ['var(--warning)', '!', '沿用上次資料'], missing: ['var(--critical)', '✕', '無資料'] };
+  const rows = [];
+  Object.entries(D.sources).forEach(([k, s]) => s.items.forEach(it => {
+    const m = st[it.status] || st.missing;
+    const link = s.type === 'oecd' ? `<a href="https://data-explorer.oecd.org/" target="_blank" rel="noopener">OECD Data Explorer</a>` : `<a href="https://data.gov.tw/dataset/${esc(it.id)}" target="_blank" rel="noopener">${esc(it.id)}</a>`;
+    rows.push(`<tr><td class="txt">${esc(s.label)}${it.partIndex ? '（第 ' + (it.partIndex + 1) + ' 檔）' : ''}</td><td class="txt">${link}</td><td class="txt">${esc(it.title || '')}</td><td>${esc(it.modified || '')}</td><td>${esc(it.fetchedAt || '')}</td>
+      <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${it.via === 'mirror' ? '<div class="meta">原始網址被擋，改用 data.gov.tw 平台轉檔副本（非即時）</div>' : ''}${it.error ? `<div class="meta">${esc(it.error)}</div>` : ''}</td></tr>`);
+  }));
+  const repo = D.repo || '';
+  const searchUrl = q => 'https://data.gov.tw/datasets/search?p=1&size=10&s=_score_desc&rft=' + encodeURIComponent(q);
+  const disc = Object.entries(D.sources).filter(([, s]) => s.discover).map(([k, s]) => {
+    const d = s.discover; const found = (d.found || []).slice().sort((a, b) => a.year - b.year);
+    const latestYear = found.length ? found[found.length - 1].year : null;
+    return `<tr><td class="txt"><b>${esc(s.label)}</b><div class="meta">搜尋關鍵字「${esc(d.query)}」</div></td>
+      <td class="txt">${d.ok ? `${statusBadge('已確認').replace('已確認', '自動搜尋成功')}` : `<span class="badge"><span class="dot" style="background:var(--critical)"></span>✕ 搜尋失敗</span><div class="meta">${esc(d.error || '')}</div>`}</td>
+      <td class="txt">${found.map(f => `<a href="https://data.gov.tw/dataset/${f.id}" target="_blank" rel="noopener">${f.year}年度：${f.id}</a>`).join('<br>') || '—'}${(d.added || []).length ? `<div class="meta">本次自動新增：${d.added.join('、')}</div>` : ''}</td>
+      <td class="txt">${latestYear ? '民國 ' + latestYear + ' 年度' : '—'}</td>
+      <td class="txt"><a href="${searchUrl(d.query)}" target="_blank" rel="noopener">查詢連結（data.gov.tw）</a>${repo ? `<br><a href="https://github.com/${esc(repo)}/edit/main/config/sources.json" target="_blank" rel="noopener">手動新增（在 GitHub 編輯 sources.json）</a><div class="meta">把新編號加到「${esc(k)}」的 ids 陣列最後</div>` : '<div class="meta">手動新增：把新編號加到 config/sources.json 的「' + esc(k) + '」ids 陣列最後</div>'}</td></tr>`;
+  }).join('');
+  document.getElementById('disc-table').innerHTML = disc ? `<table><thead><tr><th class="txt">資料</th><th class="txt">搜尋狀態</th><th class="txt">已找到的年度資料集</th><th class="txt">最新年度</th><th class="txt">查詢／手動新增</th></tr></thead><tbody>${disc}</tbody></table>` : '<div class="empty">尚未執行過含自動搜尋的更新</div>';
+  const mel = document.getElementById('mEditLink'); if (mel) { if (repo) mel.href = `https://github.com/${repo}/upload/main/config`; else mel.removeAttribute('href'); }
+  document.getElementById('src-table').innerHTML = `<table><thead><tr><th class="txt">資料</th><th class="txt">資料集</th><th class="txt">平台名稱</th><th>平台更新時間</th><th>本機抓取時間</th><th class="txt">狀態</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  const banners = [];
+  const f = D._fundLatest;
+  if (f) { const g = new Date(D.generatedAt.replace(' ', 'T')); const lag = (g.getFullYear() * 12 + g.getMonth() + 1) - (Math.floor(f.ym.key / 100) * 12 + f.ym.key % 100);
+    if (lag > 2) banners.push(`退撫基金每月經營概況最新只到民國 ${f.ym.roc}。更新時會自動搜尋新年度資料集；若仍未出現，可能是退撫基金管理局尚未上架，可到「資料來源與更新」頁的<a href="https://data.gov.tw/datasets/search?p=1&size=10&s=_score_desc&rft=${encodeURIComponent('退撫基金每月經營概況')}" target="_blank" rel="noopener">查詢連結</a>確認。`); }
+  const cachedN = Object.values(D.sources).reduce((s, x) => s + x.items.filter(i => i.status !== 'ok').length, 0);
+  if (cachedN) banners.push(`有 ${cachedN} 個來源本次未能更新，已沿用上次成功下載的資料（見下表狀態欄）。OECD API 有流量限制，短時間內重複更新可能被暫時拒絕，約一小時後再試即可。`);
+  document.getElementById('src-banner').innerHTML = banners.map(b => `<div class="banner">${b}</div>`).join('');
+  document.getElementById('fund-banner').innerHTML = banners.length && /退撫基金每月/.test(banners[0]) ? `<div class="banner">${banners[0]}</div>` : '';
+  const total = Object.values(D.sources).reduce((s, x) => s + x.items.length, 0);
+  document.getElementById('meta').innerHTML = `資料更新：${esc(D.generatedAt)}　|　${total - cachedN}/${total} 個來源已更新${cachedN ? `，<a href="#" id="toSrc">${cachedN} 個沿用舊資料</a>` : ''}`;
+  const ts = document.getElementById('toSrc'); if (ts) ts.onclick = e => { e.preventDefault(); showTab('sources'); };
+}
+
+/* ---------------- OECD country picker ---------------- */
+function renderPicker() {
+  const avail = PICK_COUNTRIES.filter(a => OE.pag.some(r => r.A === a) || OE.socx.some(r => r.A === a));
+  document.getElementById('picker').innerHTML = `<div class="ptitle">時間序列比較國家（最多 8 國，顏色固定對應國家）</div>` +
+    avail.map(a => `<label><input type="checkbox" value="${a}"${selected.includes(a) ? ' checked' : ''}> ${esc(CN[a] || a)}</label>`).join('');
+}
+document.getElementById('picker').addEventListener('change', e => {
+  const boxes = [...document.querySelectorAll('#picker input:checked')].map(x => x.value);
+  if (boxes.length > 8) { e.target.checked = false; alert('最多選 8 個國家，以維持顏色可辨識。'); return; }
+  selected = boxes; try { localStorage.setItem('pension-oecd-sel', JSON.stringify(selected)); } catch (er) {}
+  rebuildAll(); renderTab('oecd', true);
+});
+
+/* ---------------- XLSX export with native, editable charts ---------------- */
+const xe = s => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+const colL = n => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+function sheetName(name, used) {
+  // Excel rejects : \ / ? * [ ] in sheet names, including their full-width forms; names are case-insensitive.
+  let s = String(name).replace(/[\[\]:*?\/\\：／＼？＊［］]/g, ' ').replace(/^'+|'+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 28) || 'Sheet';
+  let t = s, i = 2; while (used.has(t.toLowerCase())) t = s.slice(0, 26) + '_' + (i++); used.add(t.toLowerCase()); return t;
+}
+function cellXML(r, c, v, style) {
+  const ref = colL(c) + (r + 1); const s = style ? ` s="${style}"` : '';
+  if (v == null || v === '') return '';
+  if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"${s}><v>${v}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${xe(v)}</t></is></c>`;
+}
+function hexOf(v) { v = v.trim(); if (v.startsWith('#')) return v.slice(1).toUpperCase(); return '2A78D6'; }
+const LIGHT_PAL = ['2A78D6', 'EB6834', '1BAF7A', 'EDA100', 'E87BA4', '008300', '6250D6', 'E34948'];
+function chartXML(sh, p) {
+  const c = p.chart, T = p.table, n = T.rows.length, first = 5, last = first + n - 1, q = `'${sh.replace(/'/g, "''")}'`;
+  const catRef = `${q}!$A$${first}:$A$${last}`;
+  const strCache = arr => `<c:strCache><c:ptCount val="${arr.length}"/>${arr.map((v, i) => `<c:pt idx="${i}"><c:v>${xe(v)}</c:v></c:pt>`).join('')}</c:strCache>`;
+  const numCache = arr => `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${arr.length}"/>${arr.map((v, i) => v == null ? '' : `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache>`;
+  const isLine = c.type === 'line', horiz = c.type === 'barh';
+  const sers = c.series.map((s, i) => {
+    const L = colL(s.col); let color = LIGHT_PAL[i % 8];
+    if (c.colorKeys) { const j = PICK_COUNTRIES.indexOf(c.colorKeys[i]); color = LIGHT_PAL[(j >= 0 ? j : i) % 8]; }
+    if (c.slots) color = LIGHT_PAL[c.slots[i] % 8];
+    const sp = isLine ? `<c:spPr><a:ln w="22225" cap="rnd"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>`
+                      : `<c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>`;
+    return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:strRef><c:f>${q}!$${L}$4</c:f>${strCache([T.columns[s.col]])}</c:strRef></c:tx>${sp}
+      <c:cat><c:strRef><c:f>${catRef}</c:f>${strCache(T.rows.map(r => String(r[0])))}</c:strRef></c:cat>
+      <c:val><c:numRef><c:f>${q}!$${L}$${first}:$${L}$${last}</c:f>${numCache(T.rows.map(r => typeof r[s.col] === 'number' ? r[s.col] : null))}</c:numRef></c:val>${isLine ? '<c:smooth val="0"/>' : ''}</c:ser>`;
+  }).join('');
+  const plot = isLine
+    ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${sers}<c:marker val="1"/><c:axId val="50010"/><c:axId val="50020"/></c:lineChart>`
+    : `<c:barChart><c:barDir val="${horiz ? 'bar' : 'col'}"/><c:grouping val="${c.type === 'colStacked' ? 'stacked' : 'clustered'}"/><c:varyColors val="0"/>${sers}<c:gapWidth val="60"/>${c.type === 'colStacked' ? '<c:overlap val="100"/>' : ''}<c:axId val="50010"/><c:axId val="50020"/></c:barChart>`;
+  const title = `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="zh-TW" sz="1200" b="1"/><a:t>${xe(p.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`;
+  const txPr = `<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:endParaRPr lang="zh-TW"/></a:p></c:txPr>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:roundedCorners val="0"/>
+<c:chart>${title}<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>${plot}
+<c:catAx><c:axId val="50010"/><c:scaling><c:orientation val="${horiz ? 'maxMin' : 'minMax'}"/></c:scaling><c:delete val="0"/><c:axPos val="${horiz ? 'l' : 'b'}"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/>${txPr}<c:crossAx val="50020"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>
+<c:valAx><c:axId val="50020"/><c:scaling><c:orientation val="minMax"/>${c.min != null ? `<c:min val="${c.min}"/>` : ''}</c:scaling><c:delete val="0"/><c:axPos val="${horiz ? 't' : 'l'}"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E1E0D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${txPr}<c:crossAx val="50010"/><c:crosses val="${horiz ? 'max' : 'autoZero'}"/><c:crossBetween val="between"/></c:valAx>
+</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/>${txPr}</c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
+}
+function sheetXML(p, hasChart) {
+  const T = p.table; const rows = [];
+  rows.push(`<row r="1">${cellXML(0, 0, p.title, 1)}</row>`);
+  rows.push(`<row r="2">${cellXML(1, 0, (p.sub ? p.sub + '。' : '') + '資料來源：' + (p.src || ''), 0)}</row>`);
+  if (p.extra) rows.push(`<row r="3">${cellXML(2, 0, p.extra, 0)}</row>`);
+  rows.push(`<row r="4">${T.columns.map((c, i) => cellXML(3, i, c, 1)).join('')}</row>`);
+  T.rows.forEach((r, ri) => rows.push(`<row r="${ri + 5}">${r.map((v, ci) => cellXML(ri + 4, ci, ci === 0 && v != null ? String(v) : v, 0)).join('')}</row>`));
+  const widths = T.columns.map((c, i) => Math.min(60, Math.max(10, String(c).length * 2 + 2, ...T.rows.slice(0, 200).map(r => String(r[i] == null ? '' : r[i]).length * (i === 0 ? 1.8 : 1.2) + 2))));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w.toFixed(1)}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${rows.join('')}</sheetData>${hasChart ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
+}
+function drawingXML(p, chartIdx) {
+  const c0 = p.table.columns.length + 1, rows = p.table.rows.length;
+  const tall = p.chart.type === 'barh' ? Math.max(22, Math.ceil(rows * (p.chart.series.length > 1 ? 1.1 : 0.8)) + 4) : 20;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>${c0}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${c0 + 10}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${3 + tall}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${chartIdx + 1}" name="圖表 ${chartIdx}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+}
+async function exportXlsx(panels, filename) {
+  if (!window.JSZip) { alert('匯出元件（JSZip）未載入，請確認網路連線後重新整理頁面。'); return; }
+  const z = new JSZip(); const used = new Set(); const sheets = []; let chartN = 0;
+  const ct = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'];
+  panels.forEach((p, i) => {
+    const n = i + 1, nm = sheetName(p.sheet || p.title, used); sheets.push(nm);
+    const hasChart = !!(p.chart && p.table.rows.length && p.chart.series.length);
+    z.file(`xl/worksheets/sheet${n}.xml`, sheetXML(p, hasChart));
+    ct.push(`<Override PartName="/xl/worksheets/sheet${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`);
+    if (hasChart) { chartN++;
+      z.file(`xl/worksheets/_rels/sheet${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${chartN}.xml"/></Relationships>`);
+      z.file(`xl/drawings/drawing${chartN}.xml`, drawingXML(p, chartN));
+      z.file(`xl/drawings/_rels/drawing${chartN}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${chartN}.xml"/></Relationships>`);
+      z.file(`xl/charts/chart${chartN}.xml`, chartXML(nm, p));
+      ct.push(`<Override PartName="/xl/drawings/drawing${chartN}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/charts/chart${chartN}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`); }
+  });
+  ct.push('</Types>');
+  z.file('[Content_Types].xml', ct.join(''));
+  z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${xe(s)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
+  z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  z.file('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Microsoft JhengHei"/></font><font><b/><sz val="11"/><name val="Microsoft JhengHei"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>');
+  const blob = await z.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', compression: 'DEFLATE' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function manualPanels() {
+  const items = { id: 'man_items', sheet: '人工確認參數', title: '人工確認參數', sub: '無法由開放平台自動擷取，需人工核對', src: '本儀表板人工確認欄位', extra: '匯出時間：' + new Date().toLocaleString('zh-TW'),
+    table: { columns: ['類別', '項目', '數值', '單位', '生效日期', '狀態', '確認日期', '確認人', '備註', '確認路徑', '連結'],
+      rows: MAN.items.map(i => [i.group, i.name, num(i.value) ?? i.value, i.unit, i.effective, i.status, i.confirmedAt || '', i.confirmedBy || '', i.note, i.path, (i.links || []).map(l => l.url).join(' ')]) } };
+  const tbls = MAN.tables.map(t => ({ id: 'man_' + t.id, sheet: t.name.replace(/（.*?）/g, ''), title: t.name, sub: '狀態：' + t.status + (t.confirmedAt ? '，確認日期 ' + t.confirmedAt : '') + (t.confirmedBy ? '，確認人 ' + t.confirmedBy : ''), src: t.path,
+    table: { columns: t.columns, rows: t.rows.map(r => r.map((v, i) => i === 0 ? v : (num(v) ?? v))) },
+    chart: { type: 'line', series: t.columns.slice(1).map((_, i) => ({ col: i + 1 })) } }));
+  return [items, ...tbls];
+}
+function sourcesPanel() {
+  const rows = []; Object.values(D.sources).forEach(s => s.items.forEach(it => rows.push([s.label, s.type === 'oecd' ? 'OECD' : it.id, it.title || '', it.modified || '', it.fetchedAt || '', { ok: '已更新', cached: '沿用上次資料', missing: '無資料' }[it.status] || it.status])));
+  return { id: 'src', sheet: '資料來源', title: '資料來源與更新狀態', sub: '資料更新：' + D.generatedAt, src: 'data.gov.tw、OECD SDMX API', table: { columns: ['資料', '資料集編號', '平台名稱', '平台更新時間', '本機抓取時間', '狀態'], rows } };
+}
+const stamp = () => { const d = new Date(); return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`; };
+
+/* ---------------- cross-indicator comparison ---------------- */
+const CMP_KEY = 'pension-cmp-v1';
+let CMP = { freq: 'Y', mode: 'index', from: '', to: '', sel: ['fund_size#1', 'ndc_ann#1', 'ndc_mem#2'], slot: {}, hidden: [] };
+try { const s = JSON.parse(localStorage.getItem(CMP_KEY) || 'null'); if (s && Array.isArray(s.sel)) CMP = Object.assign(CMP, s); } catch (e) {}
+const saveCmp = () => { try { localStorage.setItem(CMP_KEY, JSON.stringify(CMP)); } catch (e) {} };
+let cmpChart = null;
+function timeKey(v) {
+  v = String(v).trim(); let m;
+  if ((m = v.match(/^(\d{4})$/))) return { f: 'Y', k: m[1] };
+  if ((m = v.match(/^(\d{2,3})年$/))) return { f: 'Y', k: String(+m[1] + 1911) };
+  if ((m = v.match(/^(\d{4})-(\d{2})$/))) return { f: 'M', k: `${m[1]}-${m[2]}` };
+  if ((m = v.match(/^(\d{2,3})\/(\d{2})$/))) return { f: 'M', k: `${+m[1] + 1911}-${m[2]}` };
+  return null;
+}
+function colUnit(p, name) {
+  if (/件數/.test(name)) return '件'; if (/人數/.test(name)) return '人';
+  const m = name.match(/[（(]([^（）()]+)[)）]\s*$/); if (m && /元|%|人|歲|件/.test(m[1])) return m[1];
+  return p.unit || '';
+}
+function cmpCatalog() {
+  const out = [];
+  P.forEach(p => {
+    if (!p.table.rows.length || (p.chart && p.chart.type === 'barh')) return;
+    const tk = p.table.rows.map(r => timeKey(r[0]));
+    if (tk.some(x => !x) || new Set(tk.map(x => x.f)).size !== 1) return;
+    const f = tk[0].f;
+    p.table.columns.forEach((c, ci) => {
+      if (ci === 0 || !p.table.rows.some(r => typeof r[ci] === 'number')) return;
+      const pts = {}; p.table.rows.forEach((r, ri) => { if (typeof r[ci] === 'number') pts[tk[ri].k] = r[ci]; });
+      out.push({ key: p.id + '#' + ci, group: p.title, name: c, label: `${c}（${p.title.replace(/（.*?）/g, '')}）`, unit: colUnit(p, c), f, pts, tab: p.tab });
+    });
+  });
+  return out;
+}
+function cmpCompute(cat) {
+  const sel = CMP.sel.map(k => cat.find(s => s.key === k)).filter(s => s && s.f === CMP.freq);
+  let keys = [...new Set(sel.flatMap(s => Object.keys(s.pts)))].sort();
+  const all = [...new Set(cat.filter(s => s.f === CMP.freq).flatMap(s => Object.keys(s.pts)))].sort();
+  if (CMP.from) keys = keys.filter(k => k >= CMP.from); if (CMP.to) keys = keys.filter(k => k <= CMP.to);
+  // index mode: one shared base period = first period where every visible series has a non-zero value
+  const vis = sel.filter(s => !CMP.hidden.includes(s.key));
+  const commonBase = CMP.mode === 'index' && vis.length ? keys.find(k => vis.every(s => s.pts[k] != null && s.pts[k] !== 0)) || null : null;
+  if (commonBase && !CMP.from) keys = keys.filter(k => k >= commonBase);
+  const prevKey = k => { if (CMP.freq === 'Y') return String(+k - 1); const [y, m] = k.split('-'); return `${+y - 1}-${m}`; };
+  const series = sel.map(s => {
+    let data;
+    if (CMP.mode === 'raw') data = keys.map(k => s.pts[k] ?? null);
+    else if (CMP.mode === 'yoy') data = keys.map(k => { const a = s.pts[k], b = s.pts[prevKey(k)]; return a != null && b ? r2((a / b - 1) * 100, 2) : null; });
+    else { const bk = commonBase || keys.find(k => s.pts[k] != null && s.pts[k] !== 0); const base = bk ? s.pts[bk] : null;
+      data = keys.map(k => s.pts[k] != null && base ? r2(s.pts[k] / base * 100, 1) : null); }
+    return { s, data };
+  });
+  return { keys, all, series, commonBase };
+}
+function cmpSlot(key) {
+  if (CMP.slot[key] != null) return CMP.slot[key];
+  const used = new Set(CMP.sel.filter(k => k !== key).map(k => CMP.slot[k]));
+  for (let i = 0; i < 8; i++) if (!used.has(i)) { CMP.slot[key] = i; return i; }
+  return 0;
+}
+function cmpUnitLabel(R) { return CMP.mode === 'index' ? `指數（${R && R.commonBase ? R.commonBase : '首期'}＝100）` : CMP.mode === 'yoy' ? '年增率（%）' : '原始值'; }
+function renderCmp() {
+  const cat = cmpCatalog();
+  document.getElementById('cmpFreq').value = CMP.freq; document.getElementById('cmpMode').value = CMP.mode;
+  const groups = {}; cat.filter(s => s.f === CMP.freq).forEach(s => (groups[s.group] = groups[s.group] || []).push(s));
+  document.getElementById('cmpList').innerHTML = Object.entries(groups).map(([g, ss]) => `<fieldset><legend>${esc(g)}</legend>${ss.map(s =>
+    `<label><input type="checkbox" value="${esc(s.key)}"${CMP.sel.includes(s.key) ? ' checked' : ''}> <span>${esc(s.name)} <span class="meta">(${esc(s.unit)})</span></span></label>`).join('')}</fieldset>`).join('') || '<div class="meta">此頻率沒有可比較的數列</div>';
+  const R = cmpCompute(cat);
+  const opt = (v, cur) => `<option value="${v}"${v === cur ? ' selected' : ''}>${v || '（全部）'}</option>`;
+  document.getElementById('cmpFrom').innerHTML = ['', ...R.all].map(v => opt(v, CMP.from)).join('');
+  document.getElementById('cmpTo').innerHTML = ['', ...R.all].map(v => opt(v, CMP.to)).join('');
+  const units = [...new Set(R.series.map(x => x.s.unit))];
+  document.getElementById('cmpWarn').innerHTML = CMP.mode === 'raw' && units.length > 1
+    ? `<div class="banner">已選數列的單位不同（${units.map(esc).join('、')}），原始值放在同一軸上不易比較，建議改用「指數化」或「年增率」。</div>` : '';
+  const pal = SERIES();
+  const ink = cssv('--text-secondary'), grid = cssv('--grid'), axis = cssv('--axis'), surf = cssv('--surface-1');
+  const ds = R.series.map(x => { const c = pal[cmpSlot(x.s.key)]; return { label: x.s.label, data: x.data, borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: R.keys.length <= 16 ? 3 : 0, pointHoverRadius: 5, pointBorderColor: surf, pointBorderWidth: 2, spanGaps: true, tension: 0, hidden: CMP.hidden.includes(x.s.key), _key: x.s.key, _unit: CMP.mode === 'raw' ? x.s.unit : '' }; });
+  if (cmpChart) { cmpChart.destroy(); cmpChart = null; }
+  if (window.Chart) cmpChart = new Chart(document.getElementById('cv-cmp'), {
+    type: 'line', data: { labels: R.keys, datasets: ds },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}：${fmt(ctx.parsed.y)} ${ctx.dataset._unit}` } } },
+      scales: { x: { grid: { display: false }, border: { color: axis }, ticks: { color: ink, maxRotation: 0 } },
+        y: { grid: { color: grid }, border: { color: axis }, ticks: { color: ink, callback: v => fmt(v) }, title: { display: true, text: cmpUnitLabel(R), color: ink } } } } });
+  document.getElementById('cmpChips').innerHTML = R.series.map(x => `<button class="chip" data-chip="${esc(x.s.key)}" aria-pressed="${CMP.hidden.includes(x.s.key) ? 'false' : 'true'}" title="點選顯示／隱藏"><span class="sw" style="background:${pal[cmpSlot(x.s.key)]}"></span>${esc(x.s.label)}</button>`).join('')
+    || '<span class="meta">請在下方勾選要比較的指標</span>';
+  const T = cmpPanel(R);
+  document.getElementById('cmpTable').innerHTML = tableHTML(T.table);
+  saveCmp();
+}
+function cmpPanel(R) {
+  R = R || cmpCompute(cmpCatalog());
+  const vis = R.series.filter(x => !CMP.hidden.includes(x.s.key));
+  return { id: 'cmp', sheet: '跨指標比較', title: '跨指標比較－' + cmpUnitLabel(R), sub: (CMP.mode === 'index' ? (R.commonBase ? `以所有顯示數列都有資料的第一期 ${R.commonBase} 為共同基期＝100` : '各數列以區間內第一個有值的期別＝100') : CMP.mode === 'yoy' ? '與上一年（月資料為上年同月）相比' : '原始值，單位見欄名'),
+    src: '本儀表板各頁資料（見各數列名稱）', unit: '',
+    table: { columns: ['期別', ...vis.map(x => x.s.label + (CMP.mode === 'raw' ? `（${x.s.unit}）` : ''))], rows: R.keys.map((k, i) => [k, ...vis.map(x => x.data[i])]) },
+    chart: { type: 'line', series: vis.map((_, i) => ({ col: i + 1 })), colorKeys: null, slots: vis.map(x => cmpSlot(x.s.key)) } };
+}
+document.getElementById('cmpList').addEventListener('change', e => {
+  const k = e.target.value; if (!k) return;
+  if (e.target.checked) { if (CMP.sel.length >= 8) { e.target.checked = false; alert('最多比較 8 條數列，以維持顏色可辨識。'); return; } CMP.sel.push(k); cmpSlot(k); }
+  else { CMP.sel = CMP.sel.filter(x => x !== k); delete CMP.slot[k]; CMP.hidden = CMP.hidden.filter(x => x !== k); }
+  renderCmp();
+});
+document.getElementById('cmpChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-chip]'); if (!b) return; const k = b.dataset.chip;
+  CMP.hidden = CMP.hidden.includes(k) ? CMP.hidden.filter(x => x !== k) : [...CMP.hidden, k]; renderCmp();
+});
+['cmpFreq', 'cmpMode', 'cmpFrom', 'cmpTo'].forEach(id => document.getElementById(id).addEventListener('change', e => {
+  const f = { cmpFreq: 'freq', cmpMode: 'mode', cmpFrom: 'from', cmpTo: 'to' }[id]; CMP[f] = e.target.value;
+  if (id === 'cmpFreq') { CMP.from = CMP.to = ''; } renderCmp(); }));
+document.getElementById('cmpShowAll').onclick = () => { CMP.hidden = []; renderCmp(); };
+document.getElementById('cmpHideAll').onclick = () => { CMP.hidden = [...CMP.sel]; renderCmp(); };
+document.getElementById('cmpClear').onclick = () => { CMP.sel = []; CMP.slot = {}; CMP.hidden = []; renderCmp(); };
+document.getElementById('cmpExport').onclick = () => { const p = cmpPanel(); if (!p.table.columns.length || p.table.columns.length < 2) { alert('沒有可匯出的顯示中數列。'); return; } exportXlsx([p], `跨指標比較_${stamp()}.xlsx`); };
+
+/* ---------------- tabs & init ---------------- */
+function showTab(t) {
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + t));
+  if ((t === 'fund' || t === 'ins') && dirtyDomestic) { rebuildAll(); rendered.fund = rendered.ins = false; renderKPIs(); dirtyDomestic = false; }
+  if (t === 'cmp') { if (dirtyDomestic) { rebuildAll(); dirtyDomestic = false; rendered.fund = rendered.ins = false; renderKPIs(); } renderCmp(); }
+  else renderTab(t);
+  try { localStorage.setItem('pension-tab', t); } catch (e) {}
+}
+document.getElementById('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab); });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-export]'); if (b) { const p = P.find(x => x.id === b.dataset.export); if (p) exportXlsx([p], `${p.title}_${stamp()}.xlsx`); }
+  const ar = e.target.closest('[data-addrow]'); if (ar) { const t = MAN.tables[+ar.dataset.addrow]; t.rows.push(t.columns.map(() => '')); saveManual(); renderManual(); dirtyDomestic = true; }
+  const dr = e.target.closest('[data-delrow]'); if (dr) { const [ti, ri] = dr.dataset.delrow.split(':').map(Number); if (confirm('刪除這一列？')) { MAN.tables[ti].rows.splice(ri, 1); saveManual(); renderManual(); dirtyDomestic = true; } }
+});
+document.getElementById('exportAll').onclick = () => {
+  if (!D) return;
+  rebuildAll();
+  const cp = cmpPanel(); const extra = cp.table.columns.length > 1 ? [cp] : [];
+  exportXlsx([...P.filter(p => p.tab === 'fund'), ...P.filter(p => p.tab === 'ins'), ...P.filter(p => p.tab === 'oecd'), ...extra, ...manualPanels(), sourcesPanel()], `退撫與年金指標_${stamp()}.xlsx`);
+};
+/* update button: online (GitHub Pages) -> run the GitHub Actions workflow; local file -> run the .bat */
+document.getElementById('updateBtn').onclick = () => {
+  const repo = (D && D.repo) || '';
+  const local = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const body = document.getElementById('updBody'), go = document.getElementById('updGo');
+  if (!local && repo) {
+    body.innerHTML = `<p>線上版的資料由 GitHub 自動更新（每天清晨一次）。要立即更新：</p>
+      <ol><li>按「前往執行更新」開啟 GitHub 的「更新資料」流程（需登入且具有 <b>${esc(repo)}</b> 的寫入權限）。</li>
+      <li>按右側的 <b>Run workflow</b> → 再按綠色的 <b>Run workflow</b>。</li>
+      <li>約 3–5 分鐘後完成，回到本頁重新整理即可看到新資料。</li></ol>
+      <p class="meta">目前資料時間：${esc(D.generatedAt)}</p>`;
+    go.href = `https://github.com/${repo}/actions/workflows/update-data.yml`; go.hidden = false;
+  } else {
+    body.innerHTML = `<p>在本機開啟時，瀏覽器基於安全限制不能直接執行更新程式。請在儀表板資料夾中雙擊 <b>一鍵更新資料.bat</b>，完成後會自動重新開啟本頁。</p>
+      ${repo ? `<p>或使用線上版：在 GitHub 執行<a href="https://github.com/${esc(repo)}/actions/workflows/update-data.yml" target="_blank" rel="noopener">「更新資料」流程</a>。</p>` : ''}
+      <p class="meta">目前資料時間：${esc(D ? D.generatedAt : '尚無資料')}</p>`;
+    go.hidden = true;
+  }
+  document.getElementById('updDlg').showModal();
+};
+document.getElementById('mExcel').onclick = () => exportXlsx(manualPanels(), `人工確認參數_${stamp()}.xlsx`);
+document.getElementById('mExport').onclick = () => {
+  const out = Object.assign({}, D.manual, { items: MAN.items, tables: MAN.tables, exportedAt: new Date().toISOString() });
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'manual.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+document.getElementById('mImport').onclick = () => document.getElementById('mFile').click();
+document.getElementById('mFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = JSON.parse(await f.text()); if (!Array.isArray(j.items)) throw new Error('格式不符');
+    MAN.items = j.items; MAN.tables = j.tables || MAN.tables; saveManual(); renderManual(); dirtyDomestic = true; alert('已匯入。'); }
+  catch (er) { alert('匯入失敗：' + er.message); }
+  e.target.value = '';
+};
+document.getElementById('mReset').onclick = () => { if (!confirm('清除本機修改，還原為 config/manual.json 的預設值？')) return; try { localStorage.removeItem(MKEY); } catch (e) {} loadManual(); renderManual(); dirtyDomestic = true; };
+const mr = document.getElementById('manual-root');
+mr.addEventListener('change', onManualInput);
+mr.addEventListener('input', e => { if (e.target.tagName !== 'SELECT') onManualInput(e); });
+
+function init() {
+  if (!D) { document.getElementById('nodata').hidden = false; document.querySelectorAll('section.tab').forEach(s => s.remove()); document.getElementById('exportAll').disabled = true; return; }
+  if (!window.Chart) { document.querySelector('main').insertAdjacentHTML('afterbegin', '<div class="banner">圖表元件（Chart.js）無法從網路載入；資料表與 Excel 匯出仍可使用時請確認網路連線。</div>'); }
+  loadManual(); rebuildAll(); renderManual(); renderKPIs(); renderSources(); renderPicker();
+  let t = 'fund'; try { t = localStorage.getItem('pension-tab') || 'fund'; } catch (e) {}
+  showTab(t);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { Object.keys(rendered).forEach(k => rendered[k] = false); showTab(document.querySelector('#tabs [aria-selected="true"]').dataset.tab); });
+}
+if (window.Chart) { Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; }
+init();
+</script>
+</body>
+</html>
