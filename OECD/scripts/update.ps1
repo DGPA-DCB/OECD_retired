@@ -37,7 +37,9 @@ function Test-Csv($text) {
 
 $cfg = Read-Json (Join-Path $root 'config\sources.json')
 $results = New-Object System.Collections.ArrayList
-$now = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+# Always record Taiwan time (GitHub runners use UTC)
+$twTz = [TimeZoneInfo]::FindSystemTimeZoneById('Taipei Standard Time')
+$now = [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $twTz).ToString('yyyy-MM-dd HH:mm:ss')
 
 function Save-Item($key, $id, $part, $text, $meta) {
   $base = Join-Path $rawDir ("{0}__{1}__{2}" -f $key, $id, $part)
