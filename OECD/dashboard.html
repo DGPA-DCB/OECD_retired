@@ -459,6 +459,8 @@ let cSlot = {};                 // country -> fixed colour slot (0-7), kept whil
 try { const s = JSON.parse(localStorage.getItem('pension-oecd-sel') || 'null'); if (Array.isArray(s) && s.length) selected = s.slice(0, 8); } catch (e) {}
 try { const o = JSON.parse(localStorage.getItem('pension-oecd-opt') || 'null'); if (o) { showAllCountries = !!o.showAll; cSlot = o.slot || {}; } } catch (e) {}
 const normA = a => isAvg(a) ? 'OECD' : a;
+const AREA_NAME = {};           // code -> display name (Chinese when known, else OECD's English name)
+const areaName = a => CN[a] || AREA_NAME[a] || a;
 function slotOf(a) {
   if (cSlot[a] != null && !selected.some(b => b !== a && cSlot[b] === cSlot[a])) return cSlot[a];
   const used = new Set(selected.filter(b => b !== a && cSlot[b] != null).map(b => cSlot[b]));
@@ -471,7 +473,7 @@ function pickCountries(rows, codeOf) {
   if (showAllCountries) return { rows, note: '；顯示全部國家' };
   const kept = rows.filter(r => selected.includes(normA(codeOf(r))));
   const have = new Set(kept.map(r => normA(codeOf(r))));
-  const missing = selected.filter(a => !have.has(a)).map(a => CN[a] || a);
+  const missing = selected.filter(a => !have.has(a)).map(areaName);
   return { rows: kept, note: `；顯示已勾選 ${kept.length} 國` + (missing.length ? `（無資料：${missing.join('、')}）` : '') };
 }
 
@@ -479,7 +481,7 @@ let OE = null;
 function oecdRows(key) {
   const t = tables(key)[0]; if (!t) return [];
   const h = t.header, ix = {}; h.forEach((name, i) => { if (!(name in ix)) ix[name] = i; });
-  return t.rows.map(r => { const o = {}; for (const k in ix) o[k] = r[ix[k]]; o.v = num(o.OBS_VALUE); o.y = +o.TIME_PERIOD; o.A = normA(o.REF_AREA); o.name = CN[o.REF_AREA] || o['Reference area'] || o.REF_AREA; return o; }).filter(o => o.v != null);
+  return t.rows.map(r => { const o = {}; for (const k in ix) o[k] = r[ix[k]]; o.v = num(o.OBS_VALUE); o.y = +o.TIME_PERIOD; o.A = normA(o.REF_AREA); o.name = CN[o.REF_AREA] || o['Reference area'] || o.REF_AREA; if (!AREA_NAME[o.A]) AREA_NAME[o.A] = o.name; return o; }).filter(o => o.v != null);
 }
 /** keep, per country, only rows whose dims match the most-preferred available value */
 function prefer(rows, prefs) {
@@ -537,7 +539,7 @@ function buildOECD() {
     add({ id: 'o_exit_' + sx, tab: 'oecd', title: `實際退出勞動市場平均年齡（${sx === 'M' ? '男性' : '女性'}）`, sub: '單位：歲；依上方勾選國家', unit: '歲',
       def: '<p><b>實際退出勞動市場平均年齡</b>：OECD 依各年齡層勞動參與率的變化，推估 40 歲以上勞工實際離開勞動市場的平均年齡（以 5 年期間計算）。</p><p>和「法定退休年齡」對照，可看出實際上是提早還是延後退休；這是實際行為，不是制度規定。</p>',
       src: 'OECD Pensions at a Glance（ELMEA，effective labour market exit age）。',
-      table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = rs.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
+      table: { columns: ['年', ...sel.map(areaName)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = rs.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
       chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), slots: sel.map(slotOf) } });
   });
 
@@ -559,7 +561,7 @@ function buildOECD() {
     add({ id: 'o_socx', tab: 'oecd', title: '老年及遺屬現金給付公共支出占 GDP', sub: '單位：%；依上方勾選國家', unit: '%',
       def: '<p><b>老年及遺屬現金給付公共支出</b>（OECD 社會支出資料庫 SOCX）：公部門對老年者與遺屬的現金給付，包含公共年金、提前退休給付等，占 GDP 比率。</p><p>可看長期趨勢；各國最新年度不同，近年數值可能為初步估計。</p>',
       src: 'OECD Social Expenditure Database（DSD_SOCX_AGG@DF_PUB_OLD）。',
-      table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = socx.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
+      table: { columns: ['年', ...sel.map(areaName)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = socx.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
       chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), slots: sel.map(slotOf) } }); }
 
   { const tot = pa.filter(r => r.VEHICLE_TYPE === '_T'); const pr6 = pickCountries(latest(tot).sort((a, b) => b.v - a.v), r => r.A), lt = pr6.rows;
@@ -757,16 +759,24 @@ function renderSources() {
 /* ---------------- OECD country picker ---------------- */
 function renderPicker() {
   const has = a => OE.pag.some(r => r.A === a) || OE.socx.some(r => r.A === a) || OE.pa.some(r => r.A === a);
-  const members = OECD_MEMBERS.filter(has).sort((a, b) => (CN[a] || a).localeCompare(CN[b] || b, 'zh-Hant-TW'));
+  const byName = (a, b) => areaName(a).localeCompare(areaName(b), 'zh-Hant-TW');
+  const members = OECD_MEMBERS.filter(has).sort(byName);
   const list = (has('OECD') ? ['OECD'] : []).concat(members);
+  // non-member economies OECD also covers (e.g. China, India, Brazil, EU27): Chinese-named ones first
+  const allAreas = [...new Set([...OE.pag, ...OE.socx, ...OE.pa].map(r => r.A))];
+  const others = allAreas.filter(a => a !== 'OECD' && !OECD_MEMBERS.includes(a))
+    .sort((a, b) => (CN[a] ? 0 : 1) - (CN[b] ? 0 : 1) || byName(a, b));
   const pal = SERIES();
+  const box = a => { const on = selected.includes(a);
+    return `<label><input type="checkbox" value="${a}"${on ? ' checked' : ''}> ${on ? `<span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${pal[slotOf(a) % 8]}"></span>` : ''}${esc(areaName(a))}</label>`; };
   document.getElementById('picker').innerHTML =
     `<div class="ptitle" style="display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center">
-       <span>比較國家：已勾選 <b>${selected.length}</b>／8 國（所有 OECD 圖表都只顯示勾選的國家，顏色固定對應國家）</span>
+       <span>比較國家：已勾選 <b>${selected.length}</b>／8 國（所有 OECD 圖表都只顯示勾選的國家，顏色固定對應國家；非會員國在下方「其他經濟體」）</span>
        <label><input type="checkbox" data-all="1"${showAllCountries ? ' checked' : ''}> 橫條圖顯示全部國家（看完整排名）</label>
        <button class="btn" type="button" data-clear="1">清除勾選</button></div>` +
-    list.map(a => { const on = selected.includes(a);
-      return `<label><input type="checkbox" value="${a}"${on ? ' checked' : ''}> ${on ? `<span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${pal[slotOf(a) % 8]}"></span>` : ''}${esc(CN[a] || a)}</label>`; }).join('');
+    list.map(box).join('') +
+    (others.length ? `<details style="width:100%"${others.some(a => selected.includes(a)) ? ' open' : ''}><summary style="cursor:pointer;color:var(--accent);margin:4px 0">其他經濟體（非 OECD 會員，如中國大陸、印度、巴西、歐盟；${others.length} 個，部分指標才有資料）</summary>
+       <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${others.map(box).join('')}</div></details>` : '');
 }
 function onCountriesChanged() { saveCountrySel(); rebuildAll(); renderPicker(); renderTab('oecd', true); }
 document.getElementById('picker').addEventListener('change', e => {
