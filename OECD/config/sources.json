@@ -30,6 +30,14 @@
     { "key": "ndc_fund_size",  "label": "職業別退休金基金運用規模",           "ids": [157823], "parts": [0] },
     { "key": "ndc_recipients", "label": "各職業退休金制度領取人數（年金）",   "ids": [170821], "parts": [0] }
   ],
+  "_lawWatch說明": "法規修正偵測：每次更新從全國法規資料庫 API 下載法規清單，比對下列法規的最新修正日期。若晚於 baseline（設定時已核對的版本）或該參數上次確認時記錄的版本，就在儀表板提醒 items 所列的人工確認參數重新確認。",
+  "lawWatch": [
+    { "pcode": "M0090015", "name": "老年農民福利津貼暫行條例",       "baseline": "20180613", "items": ["farmer_full", "farmer_half"] },
+    { "pcode": "S0080034", "name": "公務人員退休資遣撫卹法",         "baseline": "20251226", "items": ["fund_rate_civil", "fund_rate_share"] },
+    { "pcode": "H0150049", "name": "公立學校教職員退休資遣撫卹條例", "baseline": "20251226", "items": ["fund_rate_teacher"] },
+    { "pcode": "F0040020", "name": "陸海空軍軍官士官服役條例",       "baseline": "20220119", "items": ["fund_rate_military"] },
+    { "pcode": "N0050001", "name": "勞工保險條例",                   "baseline": "20260121", "items": ["li_rate_history"] }
+  ],
   "_oecd說明": "OECD 查詢代碼以「.」分隔各維度；網址結尾不可是「.」（Windows PowerShell 會自動刪除結尾的點，導致查詢格式錯誤而被拒），所以最後一個維度一律寫明確的值。",
   "oecd": [
     { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率〔低薪／平均／高薪〕、退休年齡、老年貧窮、年金支出）",
