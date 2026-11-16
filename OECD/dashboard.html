@@ -145,7 +145,7 @@ details.def .def-body b { color: var(--text-primary); }
     <div class="grid" id="grid-ins"></div>
   </section>
   <section class="tab" id="tab-oecd">
-    <p class="intro">OECD 各國資料作為國際參照（OECD 資料庫不含臺灣）。勾選國家會影響時間序列圖；橫條圖列出全部國家，已勾選國家以粗體標示。</p>
+    <p class="intro">OECD 各國資料作為國際參照（OECD 資料庫不含臺灣）。在下方勾選要比較的國家（最多 8 國），所有圖表都只顯示這些國家；要看全部國家的完整排名，可打開「橫條圖顯示全部國家」，此時已勾選的國家以粗體標示。每張圖下方的「指標定義」說明計算方式。</p>
     <div class="picker" id="picker"></div>
     <div class="grid" id="grid-oecd"></div>
   </section>
@@ -451,10 +451,29 @@ const DEF_RR_LVL = '<p>同一套 OECD 所得替代率計算（定義見「所得
   + '<li><b>高薪者明顯較低</b>：通常是公共年金設有投保薪資上限，高薪者超過上限的部分不計入。</li></ul>'
   + '<p>這仍是制度設計的假設性比較，不是實際低薪退休者的領取金額；實際老年經濟狀況可參考「老年所得貧窮率」。</p>';
 const isAvg = a => a === 'OECD' || a === 'OECD_REP';
-const PICK_COUNTRIES = ['OECD', 'JPN', 'KOR', 'USA', 'DEU', 'GBR', 'FRA', 'CAN', 'AUS', 'NLD', 'SWE', 'CHE', 'NZL', 'DNK', 'NOR', 'ITA', 'ESP', 'CHL', 'MEX'];
+const OECD_MEMBERS = ['AUS', 'AUT', 'BEL', 'CAN', 'CHL', 'COL', 'CRI', 'CZE', 'DNK', 'EST', 'FIN', 'FRA', 'DEU', 'GRC', 'HUN', 'ISL', 'IRL', 'ISR', 'ITA', 'JPN', 'KOR', 'LVA', 'LTU', 'LUX', 'MEX', 'NLD', 'NZL', 'NOR', 'POL', 'PRT', 'SVK', 'SVN', 'ESP', 'SWE', 'CHE', 'TUR', 'GBR', 'USA'];
+const PICK_COUNTRIES = ['OECD', ...OECD_MEMBERS];
 let selected = ['OECD', 'JPN', 'KOR', 'USA', 'DEU', 'GBR'];
-try { const s = JSON.parse(localStorage.getItem('pension-oecd-sel') || 'null'); if (Array.isArray(s) && s.length) selected = s; } catch (e) {}
+let showAllCountries = false;   // false: every OECD chart shows only the ticked countries
+let cSlot = {};                 // country -> fixed colour slot (0-7), kept while the country stays ticked
+try { const s = JSON.parse(localStorage.getItem('pension-oecd-sel') || 'null'); if (Array.isArray(s) && s.length) selected = s.slice(0, 8); } catch (e) {}
+try { const o = JSON.parse(localStorage.getItem('pension-oecd-opt') || 'null'); if (o) { showAllCountries = !!o.showAll; cSlot = o.slot || {}; } } catch (e) {}
 const normA = a => isAvg(a) ? 'OECD' : a;
+function slotOf(a) {
+  if (cSlot[a] != null && !selected.some(b => b !== a && cSlot[b] === cSlot[a])) return cSlot[a];
+  const used = new Set(selected.filter(b => b !== a && cSlot[b] != null).map(b => cSlot[b]));
+  for (let i = 0; i < 8; i++) if (!used.has(i)) { cSlot[a] = i; return i; }
+  return 0;
+}
+function saveCountrySel() { try { localStorage.setItem('pension-oecd-sel', JSON.stringify(selected)); localStorage.setItem('pension-oecd-opt', JSON.stringify({ showAll: showAllCountries, slot: cSlot })); } catch (e) {} }
+/** cross-country (bar) charts: keep only ticked countries unless "show all" is on */
+function pickCountries(rows, codeOf) {
+  if (showAllCountries) return { rows, note: '；顯示全部國家' };
+  const kept = rows.filter(r => selected.includes(normA(codeOf(r))));
+  const have = new Set(kept.map(r => normA(codeOf(r))));
+  const missing = selected.filter(a => !have.has(a)).map(a => CN[a] || a);
+  return { rows: kept, note: `；顯示已勾選 ${kept.length} 國` + (missing.length ? `（無資料：${missing.join('、')}）` : '') };
+}
 
 let OE = null;
 function oecdRows(key) {
@@ -482,8 +501,9 @@ function buildOECD() {
   // replacement rates (gross/net), latest
   const g = latest(prefer(M('GPRR100'), S)), n = latest(prefer(M('NPRR100'), S));
   const nm = {}; n.forEach(r => nm[r.A] = r);
-  const rr = g.map(r => [r.name, r.v, nm[r.A] ? nm[r.A].v : null, r.A, r.y]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1));
-  add({ id: 'o_rr', tab: 'oecd', title: '所得替代率（平均工資者）', sub: `單位：%；強制性制度、男性、22 歲入職之完整職涯；資料年 ${yrs(g)}`, unit: '%', tall: true, codes: rr.map(r => r[3]),
+  const rrAll = g.map(r => [r.name, r.v, nm[r.A] ? nm[r.A].v : null, r.A, r.y]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1));
+  const pr1 = pickCountries(rrAll, r => r[3]), rr = pr1.rows;
+  add({ id: 'o_rr', tab: 'oecd', title: '所得替代率（平均工資者）', sub: `單位：%；強制性制度、男性、22 歲入職之完整職涯；資料年 ${yrs(g)}${pr1.note}`, unit: '%', tall: true, codes: rr.map(r => r[3]),
     def: DEF_RR,
     src: 'OECD Pensions at a Glance（DSD_PAG@DF_PAG：GPRR100、NPRR100）。',
     table: { columns: ['國家', '毛所得替代率', '淨所得替代率'], rows: rr.map(r => r.slice(0, 3)) },
@@ -493,17 +513,18 @@ function buildOECD() {
   { const lv = code => { const m = {}; latest(prefer(M(code), S)).forEach(r => m[r.A] = r); return m; };
     const n50 = lv('NPRR50'), n100 = lv('NPRR100'), n200 = lv('NPRR200'), g50 = lv('GPRR50'), g100 = lv('GPRR100');
     const areas = Object.keys(n50).filter(a => n100[a]);
-    const rows = areas.map(a => [n50[a].name, n50[a].v, n100[a].v, n200[a] ? n200[a].v : null, r2(n50[a].v - n100[a].v, 1), g50[a] ? g50[a].v : null, g100[a] ? g100[a].v : null, a])
+    const rowsAll = areas.map(a => [n50[a].name, n50[a].v, n100[a].v, n200[a] ? n200[a].v : null, r2(n50[a].v - n100[a].v, 1), g50[a] ? g50[a].v : null, g100[a] ? g100[a].v : null, a])
       .sort((x, y) => y[1] - x[1]);
-    if (rows.length) add({ id: 'o_rr_lvl', tab: 'oecd', title: '淨所得替代率：低薪、平均、高薪者比較', sub: `單位：%；薪資為全國平均工資的 50%（低薪）／100%（平均）／200%（高薪）；強制性制度、男性完整職涯；依低薪者排序；資料年 ${yrs(Object.values(n50))}`, unit: '%', tall: true, codes: rows.map(r => r[7]),
+    const pr2 = pickCountries(rowsAll, r => r[7]), rows = pr2.rows;
+    if (rowsAll.length) add({ id: 'o_rr_lvl', tab: 'oecd', title: '淨所得替代率：低薪、平均、高薪者比較', sub: `單位：%；薪資為全國平均工資的 50%（低薪）／100%（平均）／200%（高薪）；強制性制度、男性完整職涯；依低薪者排序；資料年 ${yrs(Object.values(n50))}${pr2.note}`, unit: '%', tall: true, codes: rows.map(r => r[7]),
       def: DEF_RR_LVL,
       src: 'OECD Pensions at a Glance（NPRR50、NPRR100、NPRR200；毛所得替代率 GPRR50、GPRR100 列於資料表）。',
       table: { columns: ['國家', '低薪者(50%)淨替代率', '平均工資者(100%)淨替代率', '高薪者(200%)淨替代率', '低薪減平均(百分點)', '低薪者毛替代率', '平均工資者毛替代率'], rows: rows.map(r => r.slice(0, 7)) },
       chart: { type: 'barh', series: [{ col: 1 }, { col: 2 }, { col: 3 }] } }); }
 
   const c1 = latest(prefer(M('CRPLF22'), S)), f1 = latest(prefer(M('FRPLF22'), S)); const fm = {}; f1.forEach(r => fm[r.A] = r);
-  const ra = c1.map(r => [r.name, r.v, fm[r.A] ? fm[r.A].v : null, r.A]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1));
-  add({ id: 'o_age', tab: 'oecd', title: '法定退休年齡：現行與未來', sub: `單位：歲；22 歲進入勞動市場之男性；資料年 ${yrs(c1)}`, unit: '歲', tall: true, codes: ra.map(r => r[3]),
+  const pr3 = pickCountries(c1.map(r => [r.name, r.v, fm[r.A] ? fm[r.A].v : null, r.A]).sort((a, b) => (b[2] ?? -1) - (a[2] ?? -1)), r => r[3]), ra = pr3.rows;
+  add({ id: 'o_age', tab: 'oecd', title: '法定退休年齡：現行與未來', sub: `單位：歲；22 歲進入勞動市場之男性；資料年 ${yrs(c1)}${pr3.note}`, unit: '歲', tall: true, codes: ra.map(r => r[3]),
     def: '<p><b>法定退休年齡</b>：完整職涯者可領取全額年金、不被減額的正常退休年齡。</p><ul><li><b>現行</b>：當年（資料年）退休者適用的年齡。</li><li><b>未來</b>：當年 22 歲進入職場者，依已立法規則（含與平均餘命連動的自動調整）到退休時適用的年齡。</li></ul><p>兩者差距反映各國已立法、尚待逐步生效的延後退休幅度。</p>',
     src: 'OECD Pensions at a Glance（CRPLF22、FRPLF22）。',
     table: { columns: ['國家', '現行退休年齡', '未來退休年齡'], rows: ra.map(r => r.slice(0, 3)) },
@@ -517,18 +538,18 @@ function buildOECD() {
       def: '<p><b>實際退出勞動市場平均年齡</b>：OECD 依各年齡層勞動參與率的變化，推估 40 歲以上勞工實際離開勞動市場的平均年齡（以 5 年期間計算）。</p><p>和「法定退休年齡」對照，可看出實際上是提早還是延後退休；這是實際行為，不是制度規定。</p>',
       src: 'OECD Pensions at a Glance（ELMEA，effective labour market exit age）。',
       table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = rs.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
-      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), colorKeys: sel } });
+      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), slots: sel.map(slotOf) } });
   });
 
-  const pov = latest(prefer(M('OAIP'), { AGE: ['Y_GE66', '_T'], SEX: ['_T', '_Z'] })).sort((a, b) => b.v - a.v);
-  add({ id: 'o_pov', tab: 'oecd', title: '老年所得貧窮率（66 歲以上）', sub: '單位：%；可支配所得低於中位數 50% 之比率；各國最新年', unit: '%', tall: true, codes: pov.map(r => r.A),
+  const pr4 = pickCountries(latest(prefer(M('OAIP'), { AGE: ['Y_GE66', '_T'], SEX: ['_T', '_Z'] })).sort((a, b) => b.v - a.v), r => r.A), pov = pr4.rows;
+  add({ id: 'o_pov', tab: 'oecd', title: '老年所得貧窮率（66 歲以上）', sub: '單位：%；可支配所得低於中位數 50% 之比率；各國最新年' + pr4.note, unit: '%', tall: true, codes: pov.map(r => r.A),
     def: '<p><b>老年所得貧窮率</b>：66 歲以上人口中，家戶「等值可支配所得」低於全體人口中位數 50% 者所占比率。</p><p>可支配所得含年金、工作所得、資產所得等，扣除稅與社會保險費；「等值」是依家戶人數調整。這是相對貧窮指標，只看所得，不計自有住宅等資產。</p>',
     src: 'OECD Pensions at a Glance（OAIP）。',
     table: { columns: ['國家', '貧窮率', '資料年'], rows: pov.map(r => [r.name, r.v, String(r.y)]) },
     chart: { type: 'barh', series: [{ col: 1 }] } });
 
-  const pep = latest(M('PEP')).sort((a, b) => b.v - a.v);
-  add({ id: 'o_pep', tab: 'oecd', title: '公共年金支出占 GDP', sub: '單位：%；各國最新年', unit: '%', tall: true, codes: pep.map(r => r.A),
+  const pr5 = pickCountries(latest(M('PEP')).sort((a, b) => b.v - a.v), r => r.A), pep = pr5.rows;
+  add({ id: 'o_pep', tab: 'oecd', title: '公共年金支出占 GDP', sub: '單位：%；各國最新年' + pr5.note, unit: '%', tall: true, codes: pep.map(r => r.A),
     def: '<p><b>公共年金支出占 GDP</b>：政府支付的老年及遺屬年金等公共年金現金給付，占國內生產毛額的比率。</p><p>反映公共年金制度的財政規模，會受人口老化程度與給付水準影響；不含私人或職業年金。</p>',
     src: 'OECD Pensions at a Glance（PEP）。',
     table: { columns: ['國家', '占GDP比率', '資料年'], rows: pep.map(r => [r.name, r.v, String(r.y)]) },
@@ -539,10 +560,10 @@ function buildOECD() {
       def: '<p><b>老年及遺屬現金給付公共支出</b>（OECD 社會支出資料庫 SOCX）：公部門對老年者與遺屬的現金給付，包含公共年金、提前退休給付等，占 GDP 比率。</p><p>可看長期趨勢；各國最新年度不同，近年數值可能為初步估計。</p>',
       src: 'OECD Social Expenditure Database（DSD_SOCX_AGG@DF_PUB_OLD）。',
       table: { columns: ['年', ...sel.map(a => CN[a] || a)], rows: ys.map(y => [String(y), ...sel.map(a => { const r = socx.find(x => x.A === a && x.y === y); return r ? r.v : null; })]) },
-      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), colorKeys: sel } }); }
+      chart: { type: 'line', series: sel.map((_, i) => ({ col: i + 1 })), slots: sel.map(slotOf) } }); }
 
-  { const tot = pa.filter(r => r.VEHICLE_TYPE === '_T'); const lt = latest(tot).sort((a, b) => b.v - a.v);
-    add({ id: 'o_pa', tab: 'oecd', title: '退休準備資產占 GDP', sub: '單位：%；所有提存準備制退休金工具合計；各國最新年', unit: '%', tall: true, codes: lt.map(r => r.A),
+  { const tot = pa.filter(r => r.VEHICLE_TYPE === '_T'); const pr6 = pickCountries(latest(tot).sort((a, b) => b.v - a.v), r => r.A), lt = pr6.rows;
+    add({ id: 'o_pa', tab: 'oecd', title: '退休準備資產占 GDP', sub: '單位：%；所有提存準備制退休金工具合計；各國最新年' + pr6.note, unit: '%', tall: true, codes: lt.map(r => r.A),
       def: '<p><b>退休準備資產</b>（OECD 全球退休金統計）：所有「預先提存、以資產支應未來給付」的退休金工具累積的資產，包括退休基金、年金保險契約、帳簿準備等，占 GDP 比率。</p><p><b>不含</b>隨收隨付制公共年金的準備金，所以各國公共年金基金的規模不一定計入。</p>',
       src: 'OECD Global Pension Statistics（DSD_FP@DF_PA，VEHICLE_TYPE=_T）。',
       table: { columns: ['國家', '占GDP比率', '資料年'], rows: lt.map(r => [r.name, r.v, String(r.y)]) },
@@ -614,7 +635,7 @@ const rendered = {};
 let dirtyDomestic = false;
 function colorFor(p, i) {
   const pal = SERIES();
-  if (p.chart.colorKeys) { const k = p.chart.colorKeys[i]; const order = PICK_COUNTRIES; const j = order.indexOf(k); return pal[(j >= 0 ? j : i) % 8]; }
+  if (p.chart.slots) return pal[p.chart.slots[i] % 8];
   return pal[i % 8];
 }
 function chartConfig(p) {
@@ -651,7 +672,7 @@ function tableHTML(T) {
 }
 function cardHTML(p) {
   const h = p.tall ? Math.max(300, p.table.rows.length * (p.chart.series.length > 1 ? 22 : 16) + 60) : 300;
-  return `<article class="card${p.tall || p.wide ? ' wide' : ''}" id="card-${p.id}">
+  return `<article class="card${(p.tall && p.table.rows.length > 12) || p.wide ? ' wide' : ''}" id="card-${p.id}">
     <div class="card-head"><div><h3>${esc(p.title)}</h3><div class="sub">${esc(p.sub || '')}</div></div>
     <button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button></div>
     ${p.def ? `<details class="def"><summary>指標定義</summary><div class="def-body">${p.def}</div></details>` : ''}
@@ -735,15 +756,31 @@ function renderSources() {
 
 /* ---------------- OECD country picker ---------------- */
 function renderPicker() {
-  const avail = PICK_COUNTRIES.filter(a => OE.pag.some(r => r.A === a) || OE.socx.some(r => r.A === a));
-  document.getElementById('picker').innerHTML = `<div class="ptitle">時間序列比較國家（最多 8 國，顏色固定對應國家）</div>` +
-    avail.map(a => `<label><input type="checkbox" value="${a}"${selected.includes(a) ? ' checked' : ''}> ${esc(CN[a] || a)}</label>`).join('');
+  const has = a => OE.pag.some(r => r.A === a) || OE.socx.some(r => r.A === a) || OE.pa.some(r => r.A === a);
+  const members = OECD_MEMBERS.filter(has).sort((a, b) => (CN[a] || a).localeCompare(CN[b] || b, 'zh-Hant-TW'));
+  const list = (has('OECD') ? ['OECD'] : []).concat(members);
+  const pal = SERIES();
+  document.getElementById('picker').innerHTML =
+    `<div class="ptitle" style="display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center">
+       <span>比較國家：已勾選 <b>${selected.length}</b>／8 國（所有 OECD 圖表都只顯示勾選的國家，顏色固定對應國家）</span>
+       <label><input type="checkbox" data-all="1"${showAllCountries ? ' checked' : ''}> 橫條圖顯示全部國家（看完整排名）</label>
+       <button class="btn" type="button" data-clear="1">清除勾選</button></div>` +
+    list.map(a => { const on = selected.includes(a);
+      return `<label><input type="checkbox" value="${a}"${on ? ' checked' : ''}> ${on ? `<span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${pal[slotOf(a) % 8]}"></span>` : ''}${esc(CN[a] || a)}</label>`; }).join('');
 }
+function onCountriesChanged() { saveCountrySel(); rebuildAll(); renderPicker(); renderTab('oecd', true); }
 document.getElementById('picker').addEventListener('change', e => {
-  const boxes = [...document.querySelectorAll('#picker input:checked')].map(x => x.value);
-  if (boxes.length > 8) { e.target.checked = false; alert('最多選 8 個國家，以維持顏色可辨識。'); return; }
-  selected = boxes; try { localStorage.setItem('pension-oecd-sel', JSON.stringify(selected)); } catch (er) {}
-  rebuildAll(); renderTab('oecd', true);
+  const el = e.target;
+  if (el.dataset.all) { showAllCountries = el.checked; onCountriesChanged(); return; }
+  if (!el.value) return;
+  if (el.checked) {
+    if (selected.length >= 8) { el.checked = false; alert('最多選 8 個國家，以維持顏色可辨識。'); return; }
+    selected = [...selected, el.value]; slotOf(el.value);
+  } else { selected = selected.filter(a => a !== el.value); delete cSlot[el.value]; }
+  onCountriesChanged();
+});
+document.getElementById('picker').addEventListener('click', e => {
+  if (e.target.closest('[data-clear]')) { selected = []; cSlot = {}; onCountriesChanged(); }
 });
 
 /* ---------------- XLSX export with native, editable charts ---------------- */
