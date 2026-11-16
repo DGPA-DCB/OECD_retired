@@ -170,7 +170,7 @@ details.def .def-body b { color: var(--text-primary); }
     <div class="card wide" style="margin-top:16px"><h3>選擇指標</h3><div class="sub">勾選要比較的數列（依目前頻率列出）</div><div id="cmpList" class="cmp-list"></div></div>
   </section>
   <section class="tab" id="tab-manual">
-    <p class="intro">以下參數沒有可自動擷取的開放資料，請依「確認路徑」核對後填寫並把狀態改為「已確認」。修改只會保存在這台電腦的瀏覽器；要讓所有人看到，請按「匯出確認結果」另存 JSON，再<a id="mEditLink" target="_blank" rel="noopener">到 GitHub 上傳覆蓋 config/manual.json</a>，下次更新後即成為所有人的預設值。</p>
+    <p class="intro">以下參數沒有可自動擷取的開放資料，請依「確認路徑」核對後填寫並把狀態改為「已確認」。系統每次更新會自動偵測相關法規修正、費率變動與缺漏年度，有異常會在下方「自動偵測結果」與頁首提醒。修改只會保存在這台電腦的瀏覽器；要讓所有人看到，請按「匯出確認結果」另存 JSON，再<a id="mEditLink" target="_blank" rel="noopener">到 GitHub 上傳覆蓋 config/manual.json</a>，下次更新後即成為所有人的預設值。</p>
     <div class="toolbar">
       <button class="btn" id="mExport">匯出確認結果（JSON）</button>
       <button class="btn" id="mImport">匯入 JSON</button>
@@ -584,12 +584,70 @@ function loadManual() {
   MAN = base;
 }
 function saveManual() {
-  try { localStorage.setItem(MKEY, JSON.stringify({ items: MAN.items.map(i => ({ id: i.id, value: i.value, effective: i.effective, status: i.status, confirmedAt: i.confirmedAt, confirmedBy: i.confirmedBy, note: i.note })),
-    tables: MAN.tables.map(t => ({ id: t.id, rows: t.rows, status: t.status, confirmedAt: t.confirmedAt, confirmedBy: t.confirmedBy })) }));
+  try { localStorage.setItem(MKEY, JSON.stringify({ items: MAN.items.map(i => ({ id: i.id, value: i.value, effective: i.effective, status: i.status, confirmedAt: i.confirmedAt, confirmedBy: i.confirmedBy, note: i.note, lawChecked: i.lawChecked })),
+    tables: MAN.tables.map(t => ({ id: t.id, rows: t.rows, status: t.status, confirmedAt: t.confirmedAt, confirmedBy: t.confirmedBy, lawChecked: t.lawChecked })) }));
     document.getElementById('mSaved').textContent = '已儲存於本機瀏覽器 ' + new Date().toLocaleTimeString('zh-TW'); } catch (e) { document.getElementById('mSaved').textContent = '瀏覽器無法儲存，請改用「匯出確認結果」'; }
 }
 const manualItem = id => MAN && MAN.items.find(i => i.id === id);
 const manualTable = id => MAN && MAN.tables.find(i => i.id === id);
+const fmtD = s => s && /^\d{8}$/.test(s) ? `${s.slice(0, 4)}/${s.slice(4, 6)}/${s.slice(6)}` : (s || '');
+
+/* ---------------- automatic change detection for manual parameters ----------------
+   level: 'warn' = needs re-confirmation, 'info' = optional hint, 'ok' = checked and consistent */
+function manualChecks() {
+  const out = { list: [], byItem: {} };
+  const push = (ids, level, title, msg, link) => { const c = { ids, level, title, msg, link }; out.list.push(c); ids.forEach(id => (out.byItem[id] = out.byItem[id] || []).push(c)); };
+  if (!D || !MAN) return out;
+  // 1) law amendments (Laws & Regulations Database API, fetched on every update)
+  const lw = D.lawWatch;
+  if (lw) {
+    const laws = (lw.data && lw.data.laws) || [];
+    (lw.watch || []).forEach(w => {
+      const law = laws.find(l => l.pcode === w.pcode);
+      if (!law) { push(w.items, 'info', w.name, '本次未能取得法規資料，無法檢查修正日期。', null); return; }
+      const seenOf = id => { const it = manualItem(id) || manualTable(id); return (it && it.lawChecked && it.lawChecked[w.pcode]) || w.baseline; };
+      const stale = w.items.filter(id => law.modified > seenOf(id));
+      if (stale.length) push(stale, 'warn', law.name, `已於 ${fmtD(law.modified)} 修正（上次核對的版本為 ${fmtD(seenOf(stale[0]))}），請檢視修正內容並重新確認相關參數。`, law.url);
+      else push(w.items, 'ok', law.name, `最新修正日期 ${fmtD(law.modified)}，與上次核對的版本相同。`, law.url);
+    });
+  }
+  // 2) labour insurance rate: current rate published in dataset 6259 vs. the manual rate history
+  const ls = tables('li_share')[0], hist = manualTable('li_rate_history');
+  if (ls && ls.rows[0] && hist) {
+    const cur = num(String(ls.rows[0][1]).replace('%', '')), emp = num(String(ls.rows[0][2]).replace('%', ''));
+    const rows = hist.rows.filter(r => r[0]).slice().sort((a, b) => String(a[0]).localeCompare(String(b[0]))); const last = rows[rows.length - 1];
+    const ok = last && cur != null && Math.abs(num(last[3]) - cur) < 1e-6 && Math.abs(num(last[1]) - (cur + (emp || 0))) < 1e-6;
+    push(['li_rate_history'], ok ? 'ok' : 'warn', '勞保費率（與現行費率比對）', ok
+      ? `勞動部現行費率：普通事故 ${cur}%＋就業保險 ${emp}%（資料集 6259），與費率沿革表最後一列相符。`
+      : `勞動部現行費率：普通事故 ${cur}%＋就業保險 ${emp}%（資料集 6259），與費率沿革表最後一列（${last ? `${last[0]}：總費率 ${last[1]}%、普通事故 ${last[3]}%` : '無資料'}）不符，請新增或修正一列。`, 'https://data.gov.tw/dataset/6259');
+  }
+  // 3) yearly statistics that only appear in statistical yearbooks
+  const av = manualTable('li_old_age_avg');
+  if (av) {
+    const filled = av.rows.filter(r => num(r[1]) != null).map(r => +r[0]); const blank = av.rows.filter(r => r[0] && num(r[1]) == null).map(r => r[0]);
+    const g = new Date(String(D.generatedAt || '').replace(' ', 'T')); const expectY = g.getFullYear() - (g.getMonth() >= 6 ? 1 : 2);
+    const latestY = filled.length ? Math.max(...filled) : null; const msgs = [];
+    if (blank.length) msgs.push(`${blank.join('、')} 年尚未填寫`);
+    if (!latestY || latestY < expectY) msgs.push(`${expectY} 年的勞保統計年報應已發布，請補上`);
+    push(['li_old_age_avg'], msgs.length ? 'warn' : 'ok', '勞保老年年金平均月領', msgs.length ? msgs.join('；') + '。' : `已填至 ${latestY} 年。`, 'https://www.bli.gov.tw/');
+  }
+  const cp = manualItem('civil_pension_avg');
+  if (cp) push(['civil_pension_avg'], num(cp.value) == null ? 'info' : 'ok', '公務人員月退休所得平均', num(cp.value) == null ? '尚未填寫（選填）；填入後會出現在「各制度老年給付月額比較」圖。' : `已填寫 ${cp.value} 元。`, 'https://www.mocs.gov.tw/');
+  return out;
+}
+const CHECK_STYLE = { warn: ['var(--warning)', '!', '需確認'], info: ['var(--axis)', 'i', '提示'], ok: ['var(--good)', '✓', '正常'] };
+const checkBadge = lv => { const s = CHECK_STYLE[lv] || CHECK_STYLE.info; return `<span class="badge"><span class="dot" style="background:${s[0]}"></span>${s[1]} ${s[2]}</span>`; };
+/** short warning line for a KPI card / table row whose manual value needs re-confirmation */
+function alertNote(id) {
+  const c = (manualChecks().byItem[id] || []).find(x => x.level === 'warn');
+  return c ? `<div style="color:var(--critical);margin-top:2px">⚠ ${esc(c.title)}：${esc(c.msg)}</div>` : '';
+}
+/** when a parameter is marked confirmed, remember which law versions it was checked against */
+function stampLawChecked(it, id) {
+  const lw = D && D.lawWatch; if (!lw) return;
+  const laws = (lw.data && lw.data.laws) || [];
+  (lw.watch || []).filter(w => w.items.includes(id)).forEach(w => { const law = laws.find(l => l.pcode === w.pcode); if (law) { it.lawChecked = it.lawChecked || {}; it.lawChecked[w.pcode] = law.modified; } });
+}
 function statusBadge(st) {
   const map = { '已確認': ['var(--good)', '✓'], '需修正': ['var(--critical)', '!'], '待確認': ['var(--warning)', '?'] };
   const m = map[st] || map['待確認'];
@@ -597,18 +655,25 @@ function statusBadge(st) {
 }
 function renderManual() {
   const root = document.getElementById('manual-root');
+  const chk = manualChecks();
+  const nWarn = chk.list.filter(c => c.level === 'warn').length;
+  const chkHtml = `<div class="card wide" style="margin-bottom:16px"><h3>自動偵測結果 ${nWarn ? `<span class="badge"><span class="dot" style="background:var(--warning)"></span>! ${nWarn} 項需確認</span>` : `<span class="badge"><span class="dot" style="background:var(--good)"></span>✓ 無需處理</span>`}</h3>
+    <div class="sub">每次更新資料時自動檢查：① 相關法規是否有新修正（全國法規資料庫，資料日期 ${esc((D.lawWatch && D.lawWatch.data && D.lawWatch.data.dbUpdated) || '—')}）；② 勞保費率是否與勞動部現行費率一致；③ 年度統計是否該補新年度。把參數狀態改為「已確認」後，系統會記錄當時的法規版本，提醒就會消失，直到法規再次修正。</div>
+    <div class="table-scroll" style="max-height:none"><table><thead><tr><th class="txt">檢查項目</th><th class="txt">結果</th><th class="txt">說明</th><th class="txt">相關參數</th></tr></thead><tbody>
+    ${chk.list.map(c => `<tr><td class="txt"><b>${esc(c.title)}</b>${c.link ? `<br><a href="${esc(c.link)}" target="_blank" rel="noopener">查看來源</a>` : ''}</td><td class="txt">${checkBadge(c.level)}</td><td class="txt">${esc(c.msg)}</td><td class="txt">${c.ids.map(id => esc((manualItem(id) || manualTable(id) || {}).name || id)).join('、')}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
   const rows = MAN.items.map((it, i) => `<tr>
-    <td class="txt"><b>${esc(it.name)}</b><br><span class="meta">${esc(it.group)}</span></td>
+    <td class="txt"><b>${esc(it.name)}</b><br><span class="meta">${esc(it.group)}</span>${alertNote(it.id)}</td>
     <td><input data-i="${i}" data-f="value" value="${esc(it.value)}" aria-label="${esc(it.name)} 數值"><div class="meta">${esc(it.unit)}</div></td>
     <td><input data-i="${i}" data-f="effective" value="${esc(it.effective)}" placeholder="民國年-月-日"></td>
     <td><select data-i="${i}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === it.status ? ' selected' : ''}>${s}</option>`).join('')}</select><div style="margin-top:4px">${statusBadge(it.status)}</div></td>
     <td><input data-i="${i}" data-f="confirmedAt" value="${esc(it.confirmedAt || '')}" placeholder="確認日期"><input data-i="${i}" data-f="confirmedBy" value="${esc(it.confirmedBy || '')}" placeholder="確認人" style="margin-top:4px"></td>
     <td><textarea data-i="${i}" data-f="note">${esc(it.note)}</textarea></td>
     <td class="path">${esc(it.path)}<br>${(it.links || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('　')}</td></tr>`).join('');
-  let html = `<div class="card wide"><h3>單一參數</h3><div class="table-scroll manual-table" style="max-height:none"><table>
+  let html = chkHtml + `<div class="card wide"><h3>單一參數</h3><div class="table-scroll manual-table" style="max-height:none"><table>
     <thead><tr><th class="txt">項目</th><th class="txt">數值</th><th class="txt">生效日期</th><th class="txt">狀態</th><th class="txt">確認日期／確認人</th><th class="txt">備註</th><th class="txt">確認路徑</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   MAN.tables.forEach((t, ti) => {
-    html += `<div class="card wide" style="margin-top:16px"><div class="card-head"><div><h3>${esc(t.name)}</h3><div class="sub">${esc(t.note)}</div></div>
+    html += `<div class="card wide" style="margin-top:16px"><div class="card-head"><div><h3>${esc(t.name)}</h3><div class="sub">${esc(t.note)}</div>${alertNote(t.id)}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-addrow="${ti}">新增一列</button></div></div>
       <div class="toolbar"><label>狀態 <select data-t="${ti}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === t.status ? ' selected' : ''}>${s}</option>`).join('')}</select></label> ${statusBadge(t.status)}
       <label>確認日期 <input data-t="${ti}" data-f="confirmedAt" value="${esc(t.confirmedAt || '')}" style="width:130px"></label>
@@ -622,12 +687,17 @@ function renderManual() {
 }
 function onManualInput(e) {
   const el = e.target; if (!el.dataset) return;
-  if (el.dataset.i != null) { MAN.items[+el.dataset.i][el.dataset.f] = el.value; }
+  let target = null;
+  if (el.dataset.i != null) { target = MAN.items[+el.dataset.i]; target[el.dataset.f] = el.value; }
   else if (el.dataset.t != null && el.dataset.r != null) { MAN.tables[+el.dataset.t].rows[+el.dataset.r][+el.dataset.c] = el.value; }
-  else if (el.dataset.t != null && el.dataset.f) { MAN.tables[+el.dataset.t][el.dataset.f] = el.value; }
+  else if (el.dataset.t != null && el.dataset.f) { target = MAN.tables[+el.dataset.t]; target[el.dataset.f] = el.value; }
   else return;
+  if (target && el.dataset.f === 'status' && el.value === '已確認') {
+    stampLawChecked(target, target.id);
+    if (!target.confirmedAt) { const d = new Date(); target.confirmedAt = `${d.getFullYear() - 1911}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+  }
   saveManual();
-  if (el.tagName === 'SELECT') renderManual();
+  if (el.tagName === 'SELECT') { renderManual(); renderSources(); }
   dirtyDomestic = true;
 }
 
@@ -703,19 +773,19 @@ function renderKPIs() {
     (f ? kpi('退撫基金本年累計收益率', fmt(f.f) + '<small>%</small>', `民國 ${f.ym.roc} 止`) : '') +
     (lastMem ? kpi('退撫基金參加人數', fmt(lastMem[4], 0) + ' <small>人</small>', `公 ${fmt(lastMem[1], 0)}／教 ${fmt(lastMem[2], 0)}／軍 ${fmt(lastMem[3], 0)}（${lastMem[0]}）`) : '') +
     (lastFl ? kpi('累計收繳減撥付', fmt(lastFl[3], 0) + ' <small>億元</small>', `收繳 ${fmt(lastFl[1], 0)}／撥付 ${fmt(lastFl[2], 0)}（${lastFl[0]}）`) : '') +
-    kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', '人工確認參數；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）', statusBadge(mi('fund_rate_civil').status));
+    kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', '人工確認參數；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）' + alertNote('fund_rate_civil'), statusBadge(mi('fund_rate_civil').status));
   const la = P.find(p => p.id === 'li_avg'); const liAvg = la && [...la.table.rows].reverse().find(r => r[1] != null);
   const lg = P.find(p => p.id === 'li_grade'); const lgl = lg && lg.table.rows[lg.table.rows.length - 1];
   const np = P.find(p => p.id === 'np_rate'); const npl = np && np.table.rows[np.table.rows.length - 1];
   const ad = P.find(p => p.id === 'np_addon'); const adl = ad && ad.table.rows[ad.table.rows.length - 1];
   document.getElementById('kpi-ins').innerHTML =
-    (liAvg ? kpi('勞保老年年金平均月領', fmt(liAvg[1], 0) + ' <small>元</small>', liAvg[0] + ' 年；人工確認參數', statusBadge((manualTable('li_old_age_avg') || {}).status)) : '') +
+    (liAvg ? kpi('勞保老年年金平均月領', fmt(liAvg[1], 0) + ' <small>元</small>', liAvg[0] + ' 年；人工確認參數' + alertNote('li_old_age_avg'), statusBadge((manualTable('li_old_age_avg') || {}).status)) : '') +
     (D._gei && D._gei.general != null ? kpi('公保一般費率', fmt(D._gei.general) + '<small>%</small>', '占保俸；法定區間 ' + esc(D._gei.range) + '；資料集 31986') : '') +
     (D._npAvg ? kpi('國保老年年金平均月領', fmt(D._npAvg[3], 0) + ' <small>元</small>', `A 式 ${fmt(D._npAvg[1], 0)}／B 式 ${fmt(D._npAvg[2], 0)}（${D._npAvg[0]}）`) : '') +
     (lgl ? kpi('勞保月投保薪資上下限', fmt(lgl[1], 0) + '–' + fmt(lgl[2], 0), esc(lgl[0]) + '，' + lgl[3] + ' 級') : '') +
     (npl ? kpi('國民年金保險費率', fmt(npl[2]) + '<small>%</small>', '月投保金額 ' + fmt(npl[3], 0) + ' 元（' + esc(npl[0]) + ' 起）') : '') +
     (adl ? kpi('老年基本保證年金月額', fmt(adl[2], 0) + ' <small>元</small>', '同國保老年年金 A 式加計金額，' + esc(adl[0]) + ' 起') : '') +
-    kpi('老農津貼月額（全額）', fmt(num(mi('farmer_full').value), 0) + ' <small>元</small>', '人工確認參數；半額 ' + fmt(num(mi('farmer_half').value), 0) + ' 元', statusBadge(mi('farmer_full').status)) +
+    kpi('老農津貼月額（全額）', fmt(num(mi('farmer_full').value), 0) + ' <small>元</small>', '人工確認參數；半額 ' + fmt(num(mi('farmer_half').value), 0) + ' 元' + alertNote('farmer_full'), statusBadge(mi('farmer_full').status)) +
     (D._farmer ? kpi('老農津貼核付人數', fmt(D._farmer.tot, 0) + ' <small>人</small>', D._farmer.year + ' 年；資料集 17341') : '');
 }
 
@@ -729,6 +799,9 @@ function renderSources() {
     rows.push(`<tr><td class="txt">${esc(s.label)}${it.partIndex ? '（第 ' + (it.partIndex + 1) + ' 檔）' : ''}</td><td class="txt">${link}</td><td class="txt">${esc(it.title || '')}</td><td>${esc(it.modified || '')}</td><td>${esc(it.fetchedAt || '')}</td>
       <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${it.via === 'mirror' ? '<div class="meta">原始網址被擋，改用 data.gov.tw 平台轉檔副本（非即時）</div>' : ''}${it.error ? `<div class="meta">${esc(it.error)}</div>` : ''}</td></tr>`);
   }));
+  if (D.lawWatch) { const lw = D.lawWatch, m = st[lw.status] || st.missing, ld = lw.data || {};
+    rows.push(`<tr><td class="txt">法規修正偵測（${(lw.watch || []).length} 部法規）</td><td class="txt"><a href="https://law.moj.gov.tw/" target="_blank" rel="noopener">全國法規資料庫 API</a></td><td class="txt">${(lw.watch || []).map(w => esc(w.name)).join('、')}</td><td>${esc(ld.dbUpdated || '')}</td><td>${esc(ld.fetchedAt || '')}</td>
+      <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${lw.error ? `<div class="meta">${esc(lw.error)}</div>` : ''}</td></tr>`); }
   const repo = D.repo || '';
   const searchUrl = q => 'https://data.gov.tw/datasets/search?p=1&size=10&s=_score_desc&rft=' + encodeURIComponent(q);
   const disc = Object.entries(D.sources).filter(([, s]) => s.discover).map(([k, s]) => {
@@ -752,8 +825,11 @@ function renderSources() {
   document.getElementById('src-banner').innerHTML = banners.map(b => `<div class="banner">${b}</div>`).join('');
   document.getElementById('fund-banner').innerHTML = banners.length && /退撫基金每月/.test(banners[0]) ? `<div class="banner">${banners[0]}</div>` : '';
   const total = Object.values(D.sources).reduce((s, x) => s + x.items.length, 0);
-  document.getElementById('meta').innerHTML = `資料更新：${esc(D.generatedAt)}　|　${total - cachedN}/${total} 個來源已更新${cachedN ? `，<a href="#" id="toSrc">${cachedN} 個沿用舊資料</a>` : ''}`;
+  const nWarn = manualChecks().list.filter(c => c.level === 'warn').length;
+  document.getElementById('meta').innerHTML = `資料更新：${esc(D.generatedAt)}　|　${total - cachedN}/${total} 個來源已更新${cachedN ? `，<a href="#" id="toSrc">${cachedN} 個沿用舊資料</a>` : ''}`
+    + (nWarn ? `　|　<a href="#" id="toManual">人工確認：${nWarn} 項需注意</a>` : '');
   const ts = document.getElementById('toSrc'); if (ts) ts.onclick = e => { e.preventDefault(); showTab('sources'); };
+  const tm = document.getElementById('toManual'); if (tm) tm.onclick = e => { e.preventDefault(); showTab('manual'); };
 }
 
 /* ---------------- OECD country picker ---------------- */
@@ -890,8 +966,9 @@ async function exportXlsx(panels, filename) {
 }
 function manualPanels() {
   const items = { id: 'man_items', sheet: '人工確認參數', title: '人工確認參數', sub: '無法由開放平台自動擷取，需人工核對', src: '本儀表板人工確認欄位', extra: '匯出時間：' + new Date().toLocaleString('zh-TW'),
-    table: { columns: ['類別', '項目', '數值', '單位', '生效日期', '狀態', '確認日期', '確認人', '備註', '確認路徑', '連結'],
-      rows: MAN.items.map(i => [i.group, i.name, num(i.value) ?? i.value, i.unit, i.effective, i.status, i.confirmedAt || '', i.confirmedBy || '', i.note, i.path, (i.links || []).map(l => l.url).join(' ')]) } };
+    table: { columns: ['類別', '項目', '數值', '單位', '生效日期', '狀態', '自動偵測', '確認日期', '確認人', '備註', '確認路徑', '連結'],
+      rows: MAN.items.map(i => { const w = (manualChecks().byItem[i.id] || []).filter(c => c.level === 'warn').map(c => c.title + '：' + c.msg).join('；');
+        return [i.group, i.name, num(i.value) ?? i.value, i.unit, i.effective, i.status, w || '無異常', i.confirmedAt || '', i.confirmedBy || '', i.note, i.path, (i.links || []).map(l => l.url).join(' ')]; }) } };
   const tbls = MAN.tables.map(t => ({ id: 'man_' + t.id, sheet: t.name.replace(/（.*?）/g, ''), title: t.name, sub: '狀態：' + t.status + (t.confirmedAt ? '，確認日期 ' + t.confirmedAt : '') + (t.confirmedBy ? '，確認人 ' + t.confirmedBy : ''), src: t.path,
     table: { columns: t.columns, rows: t.rows.map(r => r.map((v, i) => i === 0 ? v : (num(v) ?? v))) },
     chart: { type: 'line', series: t.columns.slice(1).map((_, i) => ({ col: i + 1 })) } }));
