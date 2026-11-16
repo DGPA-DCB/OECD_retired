@@ -155,8 +155,41 @@ foreach ($s in $cfg['oecd']) {
   Write-Host ("[{0,-7}] {1} {2}" -f $status, $s['key'], $err)
 }
 
+# ---------- law amendment watch (Laws & Regulations Database of the ROC, official API) ----------
+# Downloads the full law list (zip ~6 MB) and keeps only the watched laws' latest amendment dates.
+$lawFile = Join-Path $rawDir 'laws.json'
+$lawStatus = 'ok'; $lawErr = $null
+if ($cfg['lawWatch']) {
+  try {
+    Add-Type -AssemblyName System.IO.Compression
+    $zipBytes = Get-Bytes 'https://law.moj.gov.tw/api/Ch/Law/JSON'
+    $zip = New-Object System.IO.Compression.ZipArchive((New-Object System.IO.MemoryStream(,$zipBytes)))
+    $entry = $zip.Entries | Where-Object { $_.FullName -like '*.json' } | Select-Object -First 1
+    $rd = New-Object System.IO.StreamReader($entry.Open(), [Text.Encoding]::UTF8); $lawText = $rd.ReadToEnd(); $rd.Close(); $zip.Dispose()
+    $lawDb = $ser.DeserializeObject($lawText.TrimStart([char]0xFEFF))
+    $watched = [System.Collections.ArrayList]::new()
+    foreach ($w in $cfg['lawWatch']) {
+      $pc = [string]$w['pcode']
+      $hit = $lawDb['Laws'] | Where-Object { ([string]$_['LawURL']) -match ('pcode=' + $pc + '$') } | Select-Object -First 1
+      if (-not $hit) { throw "law $pc not found in law database" }
+      [void]$watched.Add(@{ pcode = $pc; name = [string]$hit['LawName']; modified = [string]$hit['LawModifiedDate']; url = [string]$hit['LawURL'] })
+    }
+    [IO.File]::WriteAllText($lawFile, $ser.Serialize(@{ fetchedAt = $now; dbUpdated = [string]$lawDb['UpdateDate']; laws = $watched }), $utf8)
+  } catch {
+    $lawErr = $_.Exception.Message
+    $lawStatus = if (Test-Path $lawFile) { 'cached' } else { 'missing' }
+  }
+  [void]$results.Add([pscustomobject]@{ key = 'laws'; id = 'law'; part = 0; status = $lawStatus; error = $lawErr })
+  Write-Host ("[{0,-7}] laws {1}" -f $lawStatus, $lawErr)
+}
+
 # ---------- build data\data.js ----------
 $out = @{ generatedAt = $now; repo = [string]$cfg['repo']; sources = @{}; manual = (Read-Json (Join-Path $root 'config\manual.json')) }
+if ($cfg['lawWatch']) {
+  $lw = @{ status = $lawStatus; error = $lawErr; watch = $cfg['lawWatch']; data = $null }
+  if (Test-Path $lawFile) { $lw['data'] = Read-Json $lawFile }
+  $out['lawWatch'] = $lw
+}
 $all = @()
 foreach ($s in $cfg['datagov']) { foreach ($id in $s['ids']) { foreach ($p in $s['parts']) { $all += ,@($s['key'], $s['label'], "$id", $p, 'datagov') } } }
 foreach ($s in $cfg['oecd']) { $all += ,@($s['key'], $s['label'], 'oecd', 0, 'oecd') }
