@@ -231,7 +231,9 @@ function Get-OdsTables([byte[]]$bytes) {
   }
   return ,$tables
 }
-function To-Num($s) { $s = ([string]$s).Replace(',', '').Trim(); if ($s -eq '-' -or $s -eq '') { return 0 }; return [int]$s }
+$fwDash = [string][char]0xFF0D                        # older yearbooks: full-width dash, blank as thousands separator
+$numCell = '^\d[\d,\s]*$|^[-' + $fwDash + ']$'
+function To-Num($s) { $s = (([string]$s).Replace($fwDash, '-') -replace '[,\s]', ''); if ($s -eq '-' -or $s -eq '') { return 0 }; return [int]$s }
 if ($cfg['mocsRetire']) {
   try {
     $mr = $cfg['mocsRetire']; $site = 'https://www.mocs.gov.tw'
@@ -266,11 +268,12 @@ if ($cfg['mocsRetire']) {
         foreach ($t in $tables) {
           if ($t.title -match [string]$mr['yearTable']) {
             foreach ($r in $t.rows) { if ($r.Count -ge 9 -and $r[1] -match '^\d{4}$') {
+              if ($roc -ne $latest -and $yearsMap.ContainsKey([int]$r[1])) { continue }   # newer yearbook wins
               $yearsMap[[int]$r[1]] = @{ ad = [int]$r[1]; total = [int](To-Num $r[2]); lump = [int](To-Num $r[5]); monthly = [int](To-Num $r[8]) } } }
           } elseif ($t.title -match [string]$mr['ageTable']) {
             $dist = [System.Collections.ArrayList]::new(); $n = 0; $sum = 0
             foreach ($r in $t.rows) { $am = [regex]::Match($r[0], '^(\d{2})\D*$'); if (-not $am.Success) { continue }
-              $vals = @($r | Select-Object -Skip 1 | Where-Object { $_ -match '^[\d,]+$|^-$' }); if ($vals.Count -eq 0) { continue }
+              $vals = @($r | Select-Object -Skip 1 | Where-Object { $_ -match $numCell }); if ($vals.Count -eq 0) { continue }
               [int]$c = To-Num $vals[0]; [int]$age = $am.Groups[1].Value; [void]$dist.Add([int[]]@($age, $c)); $n += $c; $sum += $age * $c }
             if ($n -gt 0) { $agesMap[[int]$roc] = @{ roc = [int]$roc; ad = [int]$roc + 1911; n = [int]$n; avg = [double][Math]::Round($sum / $n, 2); dist = $dist; url = [string]$secUrl } }
           }
