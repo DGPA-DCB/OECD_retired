@@ -324,9 +324,9 @@ function buildDomestic() {
       const share = (a, from) => r2(a.dist.filter(d => d[0] >= from).reduce((s, d) => s + d[1], 0) / a.n * 100, 1);
       add({ id: 'civ_ret_age', tab: 'fund', title: '公務人員平均退休年齡', sub: '單位：歲；依各年齡退休人數加權平均', unit: '歲',
         def: '<p><b>平均退休年齡</b>：以年報「退休人數按年齡分」各年齡的退休人數加權平均。表中最低年齡組（44 歲以下）與最高年齡組以該組標示的年齡計算，所以是近似值。</p><p>這是<b>實際退休行為</b>，可和 OECD 的「實際退出勞動市場平均年齡」「法定退休年齡」對照；但 OECD 指標涵蓋全體勞動者，這裡只含公務人員，定義不同，僅供參考。</p>',
-        src: srcM + '年報自民國 110 年版起提供試算表格式，所以從 2021 年開始。',
+        src: srcM + `年報頁面自民國 100 年版起才有試算表附件，目前取得 ${ag[0].ad}～${last.ad} 年。`,
         table: { columns: ['年度', '平均退休年齡(歲)', '60歲以上占比(%)', '55歲以下占比(%)', '退休人數'], rows: ag.map(a => [String(a.ad), a.avg, share(a, 60), r2(100 - share(a, 56), 1), a.n]) },
-        chart: { type: 'line', series: [{ col: 1 }], min: 55 } });
+        chart: { type: 'line', series: [{ col: 1 }], min: Math.min(55, Math.floor(Math.min(...ag.map(a => a.avg)) - 1)) } });
       add({ id: 'civ_ret_dist', tab: 'fund', title: `公務人員退休年齡分布（${last.ad} 年）`, sub: '單位：人', unit: '人',
         src: srcM, table: { columns: ['年齡', '退休人數'], rows: last.dist.map((d, i) => [d[0] + '歲' + (i === 0 ? '以下' : ''), d[1]]) },
         chart: { type: 'col', series: [{ col: 1 }] } });
