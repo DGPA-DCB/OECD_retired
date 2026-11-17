@@ -183,12 +183,44 @@ if ($cfg['lawWatch']) {
   Write-Host ("[{0,-7}] laws {1}" -f $lawStatus, $lawErr)
 }
 
+# ---------- pension fund contribution rate (announcements on the fund bureau's news list) ----------
+$rateFile = Join-Path $rawDir 'fund_rate.json'
+$rateStatus = 'ok'; $rateErr = $null
+if ($cfg['fundRate']) {
+  try {
+    $html = Decode-Bytes (Get-Bytes ([string]$cfg['fundRate']['listUrl']))
+    $pat = [string]$cfg['fundRate']['pattern']
+    $anns = [System.Collections.ArrayList]::new()
+    foreach ($m in [regex]::Matches($html, '<a[^>]+href="News_Content\.aspx\?n=377[^"]*?[&;]s=(\d+)"[^>]*title="([^"]*)"')) {
+      $title = [Net.WebUtility]::HtmlDecode($m.Groups[2].Value)
+      $r = [regex]::Match($title, $pat)
+      if ($r.Success) {
+        $eff = '{0:D3}-{1:D2}-{2:D2}' -f [int]$r.Groups[2].Value, [int]$r.Groups[3].Value, [int]$r.Groups[4].Value
+        [void]$anns.Add(@{ scope = [string]$r.Groups[1].Value; effective = $eff; rate = [double]$r.Groups[5].Value; title = $title;
+          url = ('https://www.fund.gov.tw/News_Content.aspx?n=377&s=' + $m.Groups[1].Value) })
+      }
+    }
+    if ($anns.Count -eq 0) { throw 'no contribution-rate announcement found in the news list' }
+    [IO.File]::WriteAllText($rateFile, $ser.Serialize(@{ fetchedAt = $now; announcements = $anns }), $utf8)
+  } catch {
+    $rateErr = $_.Exception.Message
+    $rateStatus = if (Test-Path $rateFile) { 'cached' } else { 'missing' }
+  }
+  [void]$results.Add([pscustomobject]@{ key = 'fund_rate'; id = 'news'; part = 0; status = $rateStatus; error = $rateErr })
+  Write-Host ("[{0,-7}] fund_rate {1}" -f $rateStatus, $rateErr)
+}
+
 # ---------- build data\data.js ----------
 $out = @{ generatedAt = $now; repo = [string]$cfg['repo']; sources = @{}; manual = (Read-Json (Join-Path $root 'config\manual.json')) }
 if ($cfg['lawWatch']) {
   $lw = @{ status = $lawStatus; error = $lawErr; watch = $cfg['lawWatch']; data = $null }
   if (Test-Path $lawFile) { $lw['data'] = Read-Json $lawFile }
   $out['lawWatch'] = $lw
+}
+if ($cfg['fundRate']) {
+  $fr = @{ status = $rateStatus; error = $rateErr; items = $cfg['fundRate']['items']; listUrl = [string]$cfg['fundRate']['listUrl']; data = $null }
+  if (Test-Path $rateFile) { $fr['data'] = Read-Json $rateFile }
+  $out['fundRate'] = $fr
 }
 $all = @()
 foreach ($s in $cfg['datagov']) { foreach ($id in $s['ids']) { foreach ($p in $s['parts']) { $all += ,@($s['key'], $s['label'], "$id", $p, 'datagov') } } }
