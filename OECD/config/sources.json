@@ -44,6 +44,16 @@
     "pattern": "([軍公教]+)人員退撫基金提撥費率自民國(\\d+)年(\\d+)月(\\d+)日起調整為(\\d+(?:\\.\\d+)?)[％%]",
     "items": { "公": "fund_rate_civil", "教": "fund_rate_teacher", "軍": "fund_rate_military" }
   },
+  "_mocsRetire說明": "公務人員退休人數與退休年齡：每次更新從銓敘部《銓敘統計年報》找出各年度（minYear 以後）「銓敘業務統計」頁的 ODS 附件，讀取「退休人數按年別分」與「退休人數按年齡分」兩張表。已抓過的舊年度會沿用快取，只重抓最新年度。",
+  "mocsRetire": {
+    "startUrl": "https://www.mocs.gov.tw/pages/list.aspx?Node=1842&Type=1&Index=1",
+    "yearLinkPattern": "^中華民國\\s*(\\d+)\\s*年$",
+    "sectionPattern": "銓敘業務統計",
+    "filePattern": "公務人員退休撫卹\\.ods$",
+    "yearTable": "公務人員退休人數按年別分",
+    "ageTable": "公務人員退休人數按年齡分",
+    "minYear": 110
+  },
   "_oecd說明": "OECD 查詢代碼以「.」分隔各維度；網址結尾不可是「.」（Windows PowerShell 會自動刪除結尾的點，導致查詢格式錯誤而被拒），所以最後一個維度一律寫明確的值。",
   "oecd": [
     { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率〔低薪／平均／高薪〕、退休年齡、老年貧窮、年金支出）",
