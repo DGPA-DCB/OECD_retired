@@ -210,6 +210,86 @@ if ($cfg['fundRate']) {
   Write-Host ("[{0,-7}] fund_rate {1}" -f $rateStatus, $rateErr)
 }
 
+# ---------- civil-servant retirements (MOCS statistical yearbook, ODS attachments) ----------
+$mocsFile = Join-Path $rawDir 'mocs_retire.json'
+$mocsStatus = 'ok'; $mocsErr = $null
+function Get-OdsTables([byte[]]$bytes) {
+  Add-Type -AssemblyName System.IO.Compression
+  $zip = New-Object System.IO.Compression.ZipArchive((New-Object System.IO.MemoryStream(,$bytes)))
+  $entry = $zip.Entries | Where-Object { $_.FullName -eq 'content.xml' } | Select-Object -First 1
+  $rd = New-Object System.IO.StreamReader($entry.Open(), [Text.Encoding]::UTF8); $xml = $rd.ReadToEnd(); $rd.Close(); $zip.Dispose()
+  $tables = @()
+  foreach ($tb in [regex]::Matches($xml, '(?s)<table:table table:name="[^"]*".*?</table:table>')) {
+    $rows = New-Object System.Collections.ArrayList; $title = ''
+    foreach ($row in [regex]::Matches($tb.Value, '(?s)<table:table-row.*?</table:table-row>')) {
+      $tok = @([regex]::Matches($row.Value, '(?s)<text:p[^>]*>(.*?)</text:p>') | ForEach-Object { ([Net.WebUtility]::HtmlDecode(($_.Groups[1].Value -replace '<[^>]+>', ''))).Trim() } | Where-Object { $_ -ne '' })
+      if ($tok.Count -eq 0) { continue }
+      if ($title -eq '') { $title = $tok[0] }
+      [void]$rows.Add($tok)
+    }
+    $tables += ,@{ title = $title; rows = $rows }
+  }
+  return ,$tables
+}
+function To-Num($s) { $s = ([string]$s).Replace(',', '').Trim(); if ($s -eq '-' -or $s -eq '') { return 0 }; return [int]$s }
+if ($cfg['mocsRetire']) {
+  try {
+    $mr = $cfg['mocsRetire']; $site = 'https://www.mocs.gov.tw'
+    $yearsMap = @{}; $agesMap = @{}
+    if (Test-Path $mocsFile) { $oldM = Read-Json $mocsFile
+      foreach ($y in $oldM['years']) { $yearsMap[[int]$y['ad']] = $y }
+      foreach ($a in $oldM['ages']) { $agesMap[[int]$a['roc']] = $a } }
+    $anchor = '(?s)<a[^>]+href=[''"]([^''"]+)[''"][^>]*>(.*?)</a>'
+    $startHtml = Decode-Bytes (Get-Bytes ([string]$mr['startUrl']))
+    $yearUrl = @{}
+    foreach ($m in [regex]::Matches($startHtml, $anchor)) {
+      $txt = ($m.Groups[2].Value -replace '<[^>]+>', '' -replace '\s+', ' ').Trim()
+      $ym = [regex]::Match($txt, [string]$mr['yearLinkPattern'])
+      if ($ym.Success -and [int]$ym.Groups[1].Value -ge [int]$mr['minYear']) { $yearUrl[[int]$ym.Groups[1].Value] = $site + ([string]$m.Groups[1].Value) }
+    }
+    if ($yearUrl.Count -eq 0) { throw 'no yearbook links found' }
+    $latest = ($yearUrl.Keys | Measure-Object -Maximum).Maximum
+    foreach ($roc in ($yearUrl.Keys | Sort-Object -Descending)) {
+      if ($roc -ne $latest -and $agesMap.ContainsKey($roc)) { continue }     # older yearbooks do not change
+      try {
+        $idx = Decode-Bytes (Get-Bytes $yearUrl[$roc])
+        $sec = $null
+        foreach ($m in [regex]::Matches($idx, $anchor)) { if ((($m.Groups[2].Value -replace '<[^>]+>', '')) -match [string]$mr['sectionPattern'] -and $m.Groups[1].Value -match 'detail\.aspx') { $sec = $m.Groups[1].Value; break } }
+        if (-not $sec) { throw 'section page not found' }
+        $secUrl = $site + '/pages/' + ($sec -replace '^.*?(detail\.aspx.*)$', '$1')
+        $page = Decode-Bytes (Get-Bytes $secUrl)
+        $file = $null
+        foreach ($m in [regex]::Matches($page, "<a download href='\.\./([^']+)'[^>]*title='([^']+)'")) { if ($m.Groups[2].Value -match [string]$mr['filePattern']) { $file = $m.Groups[1].Value; break } }
+        if (-not $file) { throw 'ODS attachment not found' }
+        $fileUrl = $site + '/' + ((($file -split '/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/')
+        $tables = Get-OdsTables (Get-Bytes $fileUrl)
+        foreach ($t in $tables) {
+          if ($t.title -match [string]$mr['yearTable']) {
+            foreach ($r in $t.rows) { if ($r.Count -ge 9 -and $r[1] -match '^\d{4}$') {
+              $yearsMap[[int]$r[1]] = @{ ad = [int]$r[1]; total = [int](To-Num $r[2]); lump = [int](To-Num $r[5]); monthly = [int](To-Num $r[8]) } } }
+          } elseif ($t.title -match [string]$mr['ageTable']) {
+            $dist = [System.Collections.ArrayList]::new(); $n = 0; $sum = 0
+            foreach ($r in $t.rows) { $am = [regex]::Match($r[0], '^(\d{2})\D*$'); if (-not $am.Success) { continue }
+              $vals = @($r | Select-Object -Skip 1 | Where-Object { $_ -match '^[\d,]+$|^-$' }); if ($vals.Count -eq 0) { continue }
+              [int]$c = To-Num $vals[0]; [int]$age = $am.Groups[1].Value; [void]$dist.Add([int[]]@($age, $c)); $n += $c; $sum += $age * $c }
+            if ($n -gt 0) { $agesMap[[int]$roc] = @{ roc = [int]$roc; ad = [int]$roc + 1911; n = [int]$n; avg = [double][Math]::Round($sum / $n, 2); dist = $dist; url = [string]$secUrl } }
+          }
+        }
+        Start-Sleep -Milliseconds 500
+      } catch { if ($roc -eq $latest -and -not $agesMap.ContainsKey($roc)) { throw "yearbook ${roc}: $($_.Exception.Message)" } }
+    }
+    if ($agesMap.Count -eq 0 -or $yearsMap.Count -eq 0) { throw 'no retirement tables parsed' }
+    $yl = [System.Collections.ArrayList]::new(); foreach ($k in ($yearsMap.Keys | Sort-Object)) { [void]$yl.Add($yearsMap[$k]) }
+    $al = [System.Collections.ArrayList]::new(); foreach ($k in ($agesMap.Keys | Sort-Object)) { [void]$al.Add($agesMap[$k]) }
+    [IO.File]::WriteAllText($mocsFile, $ser.Serialize(@{ fetchedAt = $now; latest = [int]$latest; years = $yl; ages = $al }), $utf8)
+  } catch {
+    $mocsErr = $_.Exception.Message
+    $mocsStatus = if (Test-Path $mocsFile) { 'cached' } else { 'missing' }
+  }
+  [void]$results.Add([pscustomobject]@{ key = 'mocs_retire'; id = 'yearbook'; part = 0; status = $mocsStatus; error = $mocsErr })
+  Write-Host ("[{0,-7}] mocs_retire {1}" -f $mocsStatus, $mocsErr)
+}
+
 # ---------- build data\data.js ----------
 $out = @{ generatedAt = $now; repo = [string]$cfg['repo']; sources = @{}; manual = (Read-Json (Join-Path $root 'config\manual.json')) }
 if ($cfg['lawWatch']) {
@@ -221,6 +301,11 @@ if ($cfg['fundRate']) {
   $fr = @{ status = $rateStatus; error = $rateErr; items = $cfg['fundRate']['items']; listUrl = [string]$cfg['fundRate']['listUrl']; data = $null }
   if (Test-Path $rateFile) { $fr['data'] = Read-Json $rateFile }
   $out['fundRate'] = $fr
+}
+if ($cfg['mocsRetire']) {
+  $mo = @{ status = $mocsStatus; error = $mocsErr; startUrl = [string]$cfg['mocsRetire']['startUrl']; data = $null }
+  if (Test-Path $mocsFile) { $mo['data'] = Read-Json $mocsFile }
+  $out['mocsRetire'] = $mo
 }
 $all = @()
 foreach ($s in $cfg['datagov']) { foreach ($id in $s['ids']) { foreach ($p in $s['parts']) { $all += ,@($s['key'], $s['label'], "$id", $p, 'datagov') } } }
