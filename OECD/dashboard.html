@@ -97,6 +97,10 @@ details.def .def-body b { color: var(--text-primary); }
 .chip[aria-pressed="false"] .sw { opacity: .3; }
 .ychip[aria-pressed="false"] { text-decoration: none; color: var(--text-secondary); }
 .ychip[aria-pressed="true"] { border-color: var(--text-primary); font-weight: 600; }
+.layout-menu { margin-bottom: 16px; }
+.grip { cursor: grab; color: var(--text-muted); user-select: none; margin-right: 6px; font-size: 16px; }
+.drop-target { outline: 2px dashed var(--text-secondary); outline-offset: 2px; }
+.dragging { opacity: .45; }
 .cmp-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 4px 20px; font-size: 13px; }
 .cmp-list fieldset { border: 0; padding: 0; margin: 0 0 10px; }
 .cmp-list legend { font-weight: 600; color: var(--text-secondary); padding: 0; margin-bottom: 2px; }
@@ -266,7 +270,7 @@ function buildDomestic() {
       rows: years.map(y => [String(y), byYear[y].fr ?? null, byYear[y].lr ?? null, byYear[y].pr ?? null, byYear[y].nr ?? null]) },
     chart: { type: 'line', series: [1, 2, 3, 4].map(c => ({ col: c })) } });
   add({ id: 'fund_size', tab: 'fund', title: '四大基金運用規模', sub: '單位：億元；年底基金運用結餘／餘額', unit: '億元',
-    src: '同上。',
+    src: '退撫基金管理局（data.gov.tw 172649、176686）；勞動基金運用局（57162、57161、57169）。勞保基金 2022 年起為普通事故部分。',
     table: { columns: ['年度', '退撫基金', '勞工保險基金', '新制勞工退休基金', '國民年金保險基金'],
       rows: years.map(y => [String(y), byYear[y].fs ?? null, byYear[y].ls ?? null, byYear[y].ps ?? null, byYear[y].ns ?? null]) },
     chart: { type: 'line', series: [1, 2, 3, 4].map(c => ({ col: c })) } });
@@ -473,7 +477,7 @@ function buildDomestic() {
       table: { columns: ['縣市', '合計', '農民', '漁民'], rows: Object.entries(cty).map(([c, v]) => [c, v[0] + v[1], v[0], v[1]]).sort((a, b) => b[1] - a[1]) },
       chart: { type: 'barh', series: [{ col: 1 }] } });
     add({ id: 'farmer_age', tab: 'ins', title: `老農津貼核付人數－依年齡與性別（${year} 年）`, sub: '單位：人', unit: '人',
-      src: '同上。',
+      src: '勞保局「老年農民福利津貼核付人數表」（data.gov.tw 17341）。',
       table: { columns: ['年齡組', '男', '女'], rows: Object.keys(age).sort().map(k => [AGEG[k] || k, age[k][0], age[k][1]]) },
       chart: { type: 'col', series: [{ col: 1 }, { col: 2 }] } }); }
 }
@@ -813,9 +817,9 @@ function tableHTML(T) {
 }
 function cardHTML(p) {
   const h = p.tall ? Math.max(300, p.table.rows.length * (p.chart.series.length > 1 ? 22 : 16) + 60) : 300;
-  return `<article class="card${(p.tall && p.table.rows.length > 12) || p.wide ? ' wide' : ''}" id="card-${p.id}">
-    <div class="card-head"><div><h3>${esc(p.title)}</h3><div class="sub">${esc(p.sub || '')}</div></div>
-    <button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button></div>
+  return `<article class="card${(p.tall && p.table.rows.length > 12) || p.wide ? ' wide' : ''}" id="card-${p.id}" data-dropid="${p.id}" data-ptab="${p.tab}">
+    <div class="card-head"><div><h3><span class="grip" draggable="true" data-pid="${p.id}" data-ptab="${p.tab}" title="拖曳調整順序" aria-hidden="true">⠿</span>${esc(p.title)}</h3><div class="sub">${esc(p.sub || '')}</div></div>
+    <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end"><button class="btn" data-move="-1" data-mid="${p.id}" title="往前移一格" aria-label="${esc(p.title)} 往前移">◀</button><button class="btn" data-move="1" data-mid="${p.id}" title="往後移一格" aria-label="${esc(p.title)} 往後移">▶</button><button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button><button class="btn" data-hide="${p.id}" title="隱藏此指標（可從上方指標選單再打開）" aria-label="隱藏 ${esc(p.title)}">隱藏</button></div></div>
     ${p.def ? `<details class="def"><summary>指標定義</summary><div class="def-body">${p.def}</div></details>` : ''}
     ${p.controls || ''}
     ${p.table.rows.length ? `<div class="chart-box" style="height:${h}px"><canvas id="cv-${p.id}" role="img" aria-label="${esc(p.title)}"></canvas></div>` : '<div class="empty">此來源目前沒有資料</div>'}
@@ -826,10 +830,80 @@ function renderTab(tab, force) {
   if (rendered[tab] && !force) return;
   const grid = document.getElementById('grid-' + tab); if (!grid) return;
   P.filter(p => p.tab === tab).forEach(p => { if (charts[p.id]) { charts[p.id].destroy(); delete charts[p.id]; } });
-  grid.innerHTML = P.filter(p => p.tab === tab).map(cardHTML).join('');
-  P.filter(p => p.tab === tab && p.table.rows.length).forEach(p => { charts[p.id] = new Chart(document.getElementById('cv-' + p.id), chartConfig(p)); });
+  const list = orderedPanels(tab).filter(p => !isHidden(p));
+  renderMenu(tab);
+  grid.innerHTML = list.length ? list.map(cardHTML).join('') : '<div class="empty">目前沒有顯示任何指標，請從上方「指標選單」點選要打開的指標。</div>';
+  list.filter(p => p.table.rows.length).forEach(p => { charts[p.id] = new Chart(document.getElementById('cv-' + p.id), chartConfig(p)); });
   rendered[tab] = true;
 }
+
+/* ---------------- layout: which cards are shown, and in what order (per browser) ---------------- */
+const LAYOUT = { order: {}, hidden: {} };
+try { const s = JSON.parse(localStorage.getItem('pension-layout-v1') || 'null'); if (s) { LAYOUT.order = s.order || {}; LAYOUT.hidden = s.hidden || {}; } } catch (e) {}
+function saveLayout() { try { localStorage.setItem('pension-layout-v1', JSON.stringify(LAYOUT)); } catch (e) {} }
+function isHidden(p) { return (LAYOUT.hidden[p.tab] || []).includes(p.id); }
+/** panels of a tab in the user's order; panels not yet in the saved order keep their default position at the end */
+function orderedPanels(tab) {
+  const ord = LAYOUT.order[tab] || [], pos = id => { const i = ord.indexOf(id); return i < 0 ? 1e6 : i; };
+  return P.filter(p => p.tab === tab).map((p, i) => [p, i]).sort((a, b) => (pos(a[0].id) - pos(b[0].id)) || (a[1] - b[1])).map(x => x[0]);
+}
+function renderMenu(tab) {
+  const grid = document.getElementById('grid-' + tab); let m = document.getElementById('menu-' + tab);
+  if (!m) { m = document.createElement('div'); m.className = 'card layout-menu'; m.id = 'menu-' + tab; grid.parentNode.insertBefore(m, grid); }
+  const list = orderedPanels(tab), n = list.filter(p => !isHidden(p)).length;
+  m.innerHTML = `<div class="card-head"><div><h3>指標選單</h3><div class="sub">點選指標名稱可打開或隱藏；拖曳指標名稱（或卡片標題前的 ⠿）可調整順序，也可用卡片右上角的 ◀ ▶ 逐格移動。設定只記在這個瀏覽器。目前顯示 ${n}／${list.length} 項。</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0"><button class="btn" data-layout="all" data-ptab="${tab}">全部顯示</button><button class="btn" data-layout="none" data-ptab="${tab}">全部隱藏</button><button class="btn" data-layout="reset" data-ptab="${tab}" title="恢復預設的順序並顯示全部指標">恢復預設</button></div></div>
+    <div class="chips">${list.map(p => `<button class="chip ychip" draggable="true" data-pid="${p.id}" data-dropid="${p.id}" data-ptab="${tab}" aria-pressed="${!isHidden(p)}" title="點選：打開／隱藏；拖曳：調整順序">${esc(p.title)}</button>`).join('')}</div>`;
+}
+function onLayoutClick(e) {
+  const chip = e.target.closest('button[data-pid]'), hide = e.target.closest('[data-hide]'), act = e.target.closest('[data-layout]'), mv = e.target.closest('[data-move]');
+  if (!chip && !hide && !act && !mv) return false;
+  let tab;
+  if (mv) {   // move one step among the visible cards
+    const p = P.find(x => x.id === mv.dataset.mid); if (!p) return true; tab = p.tab;
+    const ids = orderedPanels(tab).map(x => x.id), vis = ids.filter(id => !isHidden(P.find(x => x.id === id)));
+    const other = vis[vis.indexOf(p.id) + (+mv.dataset.move)]; if (!other) return true;
+    const from = ids.indexOf(p.id), to = ids.indexOf(other); ids.splice(to, 0, ids.splice(from, 1)[0]);
+    LAYOUT.order[tab] = ids; saveLayout(); renderTab(tab, true);
+    const c = document.getElementById('card-' + p.id); if (c) c.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  if (act) { tab = act.dataset.ptab; const a = act.dataset.layout;
+    if (a === 'all') LAYOUT.hidden[tab] = [];
+    else if (a === 'none') LAYOUT.hidden[tab] = P.filter(p => p.tab === tab).map(p => p.id);
+    else { delete LAYOUT.hidden[tab]; delete LAYOUT.order[tab]; } }
+  else { const id = chip ? chip.dataset.pid : hide.dataset.hide, p = P.find(x => x.id === id); if (!p) return true; tab = p.tab;
+    const h = LAYOUT.hidden[tab] || (LAYOUT.hidden[tab] = []), i = h.indexOf(id);
+    if (i >= 0) h.splice(i, 1); else h.push(id); }
+  saveLayout(); renderTab(tab, true);
+  if (chip && !isHidden(P.find(x => x.id === chip.dataset.pid))) { const c = document.getElementById('card-' + chip.dataset.pid); if (c) c.scrollIntoView({ block: 'nearest' }); }
+  return true;
+}
+let dragPid = null, dragTab = null;
+function clearDropMarks() { document.querySelectorAll('.drop-target,.dragging').forEach(x => x.classList.remove('drop-target', 'dragging')); }
+document.addEventListener('dragstart', e => {
+  const src = e.target.closest && e.target.closest('[draggable="true"][data-pid]'); if (!src) return;
+  dragPid = src.dataset.pid; dragTab = src.dataset.ptab;
+  e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragPid);
+  const card = src.closest('article.card'); if (card) { e.dataTransfer.setDragImage(card, 20, 20); card.classList.add('dragging'); } else src.classList.add('dragging');
+});
+document.addEventListener('dragover', e => {
+  if (!dragPid) return; const t = e.target.closest && e.target.closest('[data-dropid]');
+  if (!t || t.dataset.ptab !== dragTab) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  if (!t.classList.contains('drop-target')) { document.querySelectorAll('.drop-target').forEach(x => x.classList.remove('drop-target')); if (t.dataset.dropid !== dragPid) t.classList.add('drop-target'); }
+});
+document.addEventListener('drop', e => {
+  if (!dragPid) return; const t = e.target.closest && e.target.closest('[data-dropid]');
+  if (!t || t.dataset.ptab !== dragTab) return;
+  e.preventDefault();
+  const ids = orderedPanels(dragTab).map(p => p.id), from = ids.indexOf(dragPid), to = ids.indexOf(t.dataset.dropid), tab = dragTab;
+  dragPid = null; clearDropMarks();
+  if (from < 0 || to < 0 || from === to) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);        // dropping on a card takes that card's position
+  LAYOUT.order[tab] = ids; saveLayout(); renderTab(tab, true);
+});
+document.addEventListener('dragend', () => { dragPid = null; clearDropMarks(); });
 function rebuildAll() { P.length = 0; buildDomestic(); buildOECD(); }
 /** rebuild and redraw one card in place (keeps scroll position and the open/closed state of its details) */
 function rerenderPanel(id) {
@@ -1206,7 +1280,7 @@ function showTab(t) {
 }
 document.getElementById('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab); });
 document.addEventListener('click', e => {
-  if (onDistClick(e)) return;
+  if (onDistClick(e) || onLayoutClick(e)) return;
   const b = e.target.closest('[data-export]'); if (b) { const p = P.find(x => x.id === b.dataset.export); if (p) exportXlsx([p], `${p.title}_${stamp()}.xlsx`); }
   const ar = e.target.closest('[data-addrow]'); if (ar) { const t = MAN.tables[+ar.dataset.addrow]; t.rows.push(t.columns.map(() => '')); saveManual(); renderManual(); dirtyDomestic = true; }
   const dr = e.target.closest('[data-delrow]'); if (dr) { const [ti, ri] = dr.dataset.delrow.split(':').map(Number); if (confirm('刪除這一列？')) { MAN.tables[ti].rows.splice(ri, 1); saveManual(); renderManual(); dirtyDomestic = true; } }
