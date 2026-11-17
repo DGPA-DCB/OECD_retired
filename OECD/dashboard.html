@@ -309,6 +309,30 @@ function buildDomestic() {
       rows: rf.rows.map(r => [r[1] + '年', r[0] + '年', yi(num(r[2])), yi(num(r[3])), yi(num(r[4])), yi(num(r[5])), yi(num(r[6]))]) },
     chart: { type: 'colStacked', series: [2, 3, 4, 5, 6].map(c => ({ col: c })) } });
 
+  /* --- civil-servant retirements (MOCS statistical yearbook) --- */
+  D._retAge = null;
+  const mo = D.mocsRetire && D.mocsRetire.data;
+  if (mo && mo.years && mo.years.length) {
+    const ys = mo.years.slice().sort((a, b) => a.ad - b.ad), ag = (mo.ages || []).slice().sort((a, b) => a.roc - b.roc);
+    const srcM = `銓敘部《銓敘統計年報》（最新為民國 ${mo.latest} 年版）「銓敘部辦理公務人員退休人數」統計表。範圍為銓敘部辦理之公務人員，不含教育人員與軍職人員。`;
+    add({ id: 'civ_retire', tab: 'fund', title: '公務人員歷年退休人數', sub: '單位：人；依退休金種類', unit: '人',
+      def: '<p><b>退休人數</b>：銓敘部當年度審定退休之公務人員人數。「月退休金」含兼領二分之一月退休金者；「一次退休金」為一次領取者。</p><p>人數變化會受年金改革、法定起支年齡調整與各年齡層人數影響。</p>',
+      src: srcM, table: { columns: ['年度', '月退休金（含兼領）', '一次退休金', '合計'], rows: ys.map(y => [String(y.ad), y.monthly, y.lump, y.total]) },
+      chart: { type: 'colStacked', series: [{ col: 1 }, { col: 2 }] } });
+    if (ag.length) {
+      const last = ag[ag.length - 1]; D._retAge = last;
+      const share = (a, from) => r2(a.dist.filter(d => d[0] >= from).reduce((s, d) => s + d[1], 0) / a.n * 100, 1);
+      add({ id: 'civ_ret_age', tab: 'fund', title: '公務人員平均退休年齡', sub: '單位：歲；依各年齡退休人數加權平均', unit: '歲',
+        def: '<p><b>平均退休年齡</b>：以年報「退休人數按年齡分」各年齡的退休人數加權平均。表中最低年齡組（44 歲以下）與最高年齡組以該組標示的年齡計算，所以是近似值。</p><p>這是<b>實際退休行為</b>，可和 OECD 的「實際退出勞動市場平均年齡」「法定退休年齡」對照；但 OECD 指標涵蓋全體勞動者，這裡只含公務人員，定義不同，僅供參考。</p>',
+        src: srcM + '年報自民國 110 年版起提供試算表格式，所以從 2021 年開始。',
+        table: { columns: ['年度', '平均退休年齡(歲)', '60歲以上占比(%)', '55歲以下占比(%)', '退休人數'], rows: ag.map(a => [String(a.ad), a.avg, share(a, 60), r2(100 - share(a, 56), 1), a.n]) },
+        chart: { type: 'line', series: [{ col: 1 }], min: 55 } });
+      add({ id: 'civ_ret_dist', tab: 'fund', title: `公務人員退休年齡分布（${last.ad} 年）`, sub: '單位：人', unit: '人',
+        src: srcM, table: { columns: ['年齡', '退休人數'], rows: last.dist.map((d, i) => [d[0] + '歲' + (i === 0 ? '以下' : ''), d[1]]) },
+        chart: { type: 'col', series: [{ col: 1 }] } });
+    }
+  }
+
   /* --- 公保 --- */
   const g = tables('gei_benefit')[0];
   if (g) { const h = g.header, c = re => col(h, re);
@@ -796,6 +820,7 @@ function renderKPIs() {
     (f ? kpi('退撫基金本年累計收益率', fmt(f.f) + '<small>%</small>', `民國 ${f.ym.roc} 止`) : '') +
     (lastMem ? kpi('退撫基金參加人數', fmt(lastMem[4], 0) + ' <small>人</small>', `公 ${fmt(lastMem[1], 0)}／教 ${fmt(lastMem[2], 0)}／軍 ${fmt(lastMem[3], 0)}（${lastMem[0]}）`) : '') +
     (lastFl ? kpi('累計收繳減撥付', fmt(lastFl[3], 0) + ' <small>億元</small>', `收繳 ${fmt(lastFl[1], 0)}／撥付 ${fmt(lastFl[2], 0)}（${lastFl[0]}）`) : '') +
+    (D._retAge ? kpi('公務人員平均退休年齡', fmt(D._retAge.avg, 1) + ' <small>歲</small>', `${D._retAge.ad} 年，退休 ${fmt(D._retAge.n, 0)} 人；銓敘統計年報`) : '') +
     kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', (mi('fund_rate_civil').auto ? `退撫基金管理局公告，${esc(mi('fund_rate_civil').effective)} 起` : '人工確認參數') + '；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）' + alertNote('fund_rate_civil'), statusBadge(mi('fund_rate_civil').status));
   const la = P.find(p => p.id === 'li_avg'); const liAvg = la && [...la.table.rows].reverse().find(r => r[1] != null);
   const lg = P.find(p => p.id === 'li_grade'); const lgl = lg && lg.table.rows[lg.table.rows.length - 1];
@@ -828,6 +853,9 @@ function renderSources() {
   if (D.fundRate) { const fr = D.fundRate, m = st[fr.status] || st.missing, fd = fr.data || {}; const a = (fd.announcements || [])[0];
     rows.push(`<tr><td class="txt">退撫基金提撥費率（公告自動讀取）</td><td class="txt"><a href="${esc(fr.listUrl)}" target="_blank" rel="noopener">退撫基金管理局最新消息</a></td><td class="txt">${a ? esc(a.title) : ''}</td><td></td><td>${esc(fd.fetchedAt || '')}</td>
       <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${fr.error ? `<div class="meta">${esc(fr.error)}</div>` : ''}</td></tr>`); }
+  if (D.mocsRetire) { const mr = D.mocsRetire, m = st[mr.status] || st.missing, md = mr.data || {};
+    rows.push(`<tr><td class="txt">公務人員退休人數與退休年齡</td><td class="txt"><a href="${esc(mr.startUrl)}" target="_blank" rel="noopener">銓敘統計年報</a></td><td class="txt">${md.latest ? '最新：民國 ' + md.latest + ' 年版（ODS 附件自動解析）' : ''}</td><td></td><td>${esc(md.fetchedAt || '')}</td>
+      <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${mr.error ? `<div class="meta">${esc(mr.error)}</div>` : ''}</td></tr>`); }
   const repo = D.repo || '';
   const searchUrl = q => 'https://data.gov.tw/datasets/search?p=1&size=10&s=_score_desc&rft=' + encodeURIComponent(q);
   const disc = Object.entries(D.sources).filter(([, s]) => s.discover).map(([k, s]) => {
