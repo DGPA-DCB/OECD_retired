@@ -582,6 +582,20 @@ function loadManual() {
     if (s) { (s.items || []).forEach(x => { const t = base.items.find(i => i.id === x.id); if (t) Object.assign(t, x); });
       (s.tables || []).forEach(x => { const t = base.tables.find(i => i.id === x.id); if (t) Object.assign(t, x); }); } } catch (e) {}
   MAN = base;
+  applyAutoRates();
+}
+/** contribution rates read from the fund bureau's announcements override the manual values */
+function applyAutoRates() {
+  MAN.items.forEach(i => { delete i.auto; if (i.status === '自動取得') i.status = '待確認'; });
+  const fr = D && D.fundRate; const anns = fr && fr.data && fr.data.announcements; if (!anns || !anns.length) return;
+  const g = String(D.generatedAt || ''); const today = `${String(+g.slice(0, 4) - 1911).padStart(3, '0')}-${g.slice(5, 7)}-${g.slice(8, 10)}`;
+  Object.entries(fr.items || {}).forEach(([ch, id]) => {
+    const it = MAN.items.find(i => i.id === id); if (!it) return;
+    const list = anns.filter(a => a.scope.includes(ch)).sort((a, b) => a.effective.localeCompare(b.effective));
+    const cur = list.filter(a => a.effective <= today).pop(); if (!cur) return;
+    it.value = String(cur.rate); it.effective = cur.effective; it.status = '自動取得';
+    it.auto = { title: cur.title, url: cur.url, upcoming: list.filter(a => a.effective > today) };
+  });
 }
 function saveManual() {
   try { localStorage.setItem(MKEY, JSON.stringify({ items: MAN.items.map(i => ({ id: i.id, value: i.value, effective: i.effective, status: i.status, confirmedAt: i.confirmedAt, confirmedBy: i.confirmedBy, note: i.note, lawChecked: i.lawChecked })),
@@ -598,6 +612,15 @@ function manualChecks() {
   const out = { list: [], byItem: {} };
   const push = (ids, level, title, msg, link) => { const c = { ids, level, title, msg, link }; out.list.push(c); ids.forEach(id => (out.byItem[id] = out.byItem[id] || []).push(c)); };
   if (!D || !MAN) return out;
+  // 0) contribution rate read from the fund bureau's announcements
+  const fr = D.fundRate;
+  if (fr) {
+    const autos = Object.values(fr.items || {}).map(id => manualItem(id)).filter(i => i && i.auto);
+    if (autos.length) { const up = autos.flatMap(i => i.auto.upcoming); const a0 = autos[0];
+      push(autos.map(i => i.id), up.length ? 'warn' : 'ok', '退撫基金提撥費率（退撫基金管理局公告）',
+        `自動讀取最新公告：自 ${a0.effective} 起 ${a0.value}%。` + (up.length ? `另已公告自 ${up[0].effective} 起調整為 ${up[0].rate}%，生效後會自動套用。` : '') + (fr.status !== 'ok' ? '（本次未能連線，沿用上次讀取結果）' : ''), a0.auto.url); }
+    else push(Object.values(fr.items || {}), 'warn', '退撫基金提撥費率（退撫基金管理局公告）', '未能從公告自動取得費率，請人工確認下列數值。', fr.listUrl);
+  }
   // 1) law amendments (Laws & Regulations Database API, fetched on every update)
   const lw = D.lawWatch;
   if (lw) {
@@ -606,7 +629,7 @@ function manualChecks() {
       const law = laws.find(l => l.pcode === w.pcode);
       if (!law) { push(w.items, 'info', w.name, '本次未能取得法規資料，無法檢查修正日期。', null); return; }
       const seenOf = id => { const it = manualItem(id) || manualTable(id); return (it && it.lawChecked && it.lawChecked[w.pcode]) || w.baseline; };
-      const stale = w.items.filter(id => law.modified > seenOf(id));
+      const stale = w.items.filter(id => !(manualItem(id) || {}).auto && law.modified > seenOf(id));
       if (stale.length) push(stale, 'warn', law.name, `已於 ${fmtD(law.modified)} 修正（上次核對的版本為 ${fmtD(seenOf(stale[0]))}），請檢視修正內容並重新確認相關參數。`, law.url);
       else push(w.items, 'ok', law.name, `最新修正日期 ${fmtD(law.modified)}，與上次核對的版本相同。`, law.url);
     });
@@ -649,7 +672,7 @@ function stampLawChecked(it, id) {
   (lw.watch || []).filter(w => w.items.includes(id)).forEach(w => { const law = laws.find(l => l.pcode === w.pcode); if (law) { it.lawChecked = it.lawChecked || {}; it.lawChecked[w.pcode] = law.modified; } });
 }
 function statusBadge(st) {
-  const map = { '已確認': ['var(--good)', '✓'], '需修正': ['var(--critical)', '!'], '待確認': ['var(--warning)', '?'] };
+  const map = { '已確認': ['var(--good)', '✓'], '自動取得': ['var(--good)', '✓'], '需修正': ['var(--critical)', '!'], '待確認': ['var(--warning)', '?'] };
   const m = map[st] || map['待確認'];
   return `<span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${esc(st || '待確認')}</span>`;
 }
@@ -663,10 +686,10 @@ function renderManual() {
     ${chk.list.map(c => `<tr><td class="txt"><b>${esc(c.title)}</b>${c.link ? `<br><a href="${esc(c.link)}" target="_blank" rel="noopener">查看來源</a>` : ''}</td><td class="txt">${checkBadge(c.level)}</td><td class="txt">${esc(c.msg)}</td><td class="txt">${c.ids.map(id => esc((manualItem(id) || manualTable(id) || {}).name || id)).join('、')}</td></tr>`).join('')}
     </tbody></table></div></div>`;
   const rows = MAN.items.map((it, i) => `<tr>
-    <td class="txt"><b>${esc(it.name)}</b><br><span class="meta">${esc(it.group)}</span>${alertNote(it.id)}</td>
-    <td><input data-i="${i}" data-f="value" value="${esc(it.value)}" aria-label="${esc(it.name)} 數值"><div class="meta">${esc(it.unit)}</div></td>
-    <td><input data-i="${i}" data-f="effective" value="${esc(it.effective)}" placeholder="民國年-月-日"></td>
-    <td><select data-i="${i}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === it.status ? ' selected' : ''}>${s}</option>`).join('')}</select><div style="margin-top:4px">${statusBadge(it.status)}</div></td>
+    <td class="txt"><b>${esc(it.name)}</b><br><span class="meta">${esc(it.group)}</span>${alertNote(it.id)}${it.auto ? `<div class="meta">來源公告：<a href="${esc(it.auto.url)}" target="_blank" rel="noopener">${esc(it.auto.title)}</a></div>${it.auto.upcoming.map(u => `<div style="color:var(--critical)">⚠ 已公告：自 ${esc(u.effective)} 起調整為 ${u.rate}%（<a href="${esc(u.url)}" target="_blank" rel="noopener">公告</a>）</div>`).join('')}` : ''}</td>
+    <td><input data-i="${i}" data-f="value" value="${esc(it.value)}" aria-label="${esc(it.name)} 數值"${it.auto ? ' disabled' : ''}><div class="meta">${esc(it.unit)}</div></td>
+    <td><input data-i="${i}" data-f="effective" value="${esc(it.effective)}" placeholder="民國年-月-日"${it.auto ? ' disabled' : ''}></td>
+    <td>${it.auto ? `${statusBadge(it.status)}<div class="meta" style="margin-top:4px">每次更新時自動讀取退撫基金管理局公告</div>` : `<select data-i="${i}" data-f="status">${['待確認', '已確認', '需修正'].map(s => `<option${s === it.status ? ' selected' : ''}>${s}</option>`).join('')}</select><div style="margin-top:4px">${statusBadge(it.status)}</div>`}</td>
     <td><input data-i="${i}" data-f="confirmedAt" value="${esc(it.confirmedAt || '')}" placeholder="確認日期"><input data-i="${i}" data-f="confirmedBy" value="${esc(it.confirmedBy || '')}" placeholder="確認人" style="margin-top:4px"></td>
     <td><textarea data-i="${i}" data-f="note">${esc(it.note)}</textarea></td>
     <td class="path">${esc(it.path)}<br>${(it.links || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('　')}</td></tr>`).join('');
@@ -773,7 +796,7 @@ function renderKPIs() {
     (f ? kpi('退撫基金本年累計收益率', fmt(f.f) + '<small>%</small>', `民國 ${f.ym.roc} 止`) : '') +
     (lastMem ? kpi('退撫基金參加人數', fmt(lastMem[4], 0) + ' <small>人</small>', `公 ${fmt(lastMem[1], 0)}／教 ${fmt(lastMem[2], 0)}／軍 ${fmt(lastMem[3], 0)}（${lastMem[0]}）`) : '') +
     (lastFl ? kpi('累計收繳減撥付', fmt(lastFl[3], 0) + ' <small>億元</small>', `收繳 ${fmt(lastFl[1], 0)}／撥付 ${fmt(lastFl[2], 0)}（${lastFl[0]}）`) : '') +
-    kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', '人工確認參數；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）' + alertNote('fund_rate_civil'), statusBadge(mi('fund_rate_civil').status));
+    kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', (mi('fund_rate_civil').auto ? `退撫基金管理局公告，${esc(mi('fund_rate_civil').effective)} 起` : '人工確認參數') + '；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）' + alertNote('fund_rate_civil'), statusBadge(mi('fund_rate_civil').status));
   const la = P.find(p => p.id === 'li_avg'); const liAvg = la && [...la.table.rows].reverse().find(r => r[1] != null);
   const lg = P.find(p => p.id === 'li_grade'); const lgl = lg && lg.table.rows[lg.table.rows.length - 1];
   const np = P.find(p => p.id === 'np_rate'); const npl = np && np.table.rows[np.table.rows.length - 1];
@@ -802,6 +825,9 @@ function renderSources() {
   if (D.lawWatch) { const lw = D.lawWatch, m = st[lw.status] || st.missing, ld = lw.data || {};
     rows.push(`<tr><td class="txt">法規修正偵測（${(lw.watch || []).length} 部法規）</td><td class="txt"><a href="https://law.moj.gov.tw/" target="_blank" rel="noopener">全國法規資料庫 API</a></td><td class="txt">${(lw.watch || []).map(w => esc(w.name)).join('、')}</td><td>${esc(ld.dbUpdated || '')}</td><td>${esc(ld.fetchedAt || '')}</td>
       <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${lw.error ? `<div class="meta">${esc(lw.error)}</div>` : ''}</td></tr>`); }
+  if (D.fundRate) { const fr = D.fundRate, m = st[fr.status] || st.missing, fd = fr.data || {}; const a = (fd.announcements || [])[0];
+    rows.push(`<tr><td class="txt">退撫基金提撥費率（公告自動讀取）</td><td class="txt"><a href="${esc(fr.listUrl)}" target="_blank" rel="noopener">退撫基金管理局最新消息</a></td><td class="txt">${a ? esc(a.title) : ''}</td><td></td><td>${esc(fd.fetchedAt || '')}</td>
+      <td class="txt"><span class="badge"><span class="dot" style="background:${m[0]}"></span>${m[1]} ${m[2]}</span>${fr.error ? `<div class="meta">${esc(fr.error)}</div>` : ''}</td></tr>`); }
   const repo = D.repo || '';
   const searchUrl = q => 'https://data.gov.tw/datasets/search?p=1&size=10&s=_score_desc&rft=' + encodeURIComponent(q);
   const disc = Object.entries(D.sources).filter(([, s]) => s.discover).map(([k, s]) => {
@@ -1147,7 +1173,7 @@ document.getElementById('mImport').onclick = () => document.getElementById('mFil
 document.getElementById('mFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try { const j = JSON.parse(await f.text()); if (!Array.isArray(j.items)) throw new Error('格式不符');
-    MAN.items = j.items; MAN.tables = j.tables || MAN.tables; saveManual(); renderManual(); dirtyDomestic = true; alert('已匯入。'); }
+    MAN.items = j.items; MAN.tables = j.tables || MAN.tables; applyAutoRates(); saveManual(); renderManual(); dirtyDomestic = true; alert('已匯入。'); }
   catch (er) { alert('匯入失敗：' + er.message); }
   e.target.value = '';
 };
