@@ -1,0 +1,64 @@
+name: 更新精算報告
+
+# 儀表板「更新精算報告」按鈕 → 在 Actions 頁按 Run workflow。
+# 到退撫基金管理局網站找出精算報告書 PDF，擷取關鍵表格並驗算；全部通過才寫入 config/actuarial.json，
+# 否則保留原數字並記錄原因（儀表板會顯示提醒）。完成後自動觸發「更新資料」重建網頁。
+on:
+  workflow_dispatch:
+    inputs:
+      reports:
+        description: '要擷取的報告：latest（最新一次）、all（第 7 次起全部）、或次別清單如 8,9'
+        required: false
+        default: latest
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: OECD
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安裝 PDF 文字擷取套件
+        run: npm install --no-save --no-audit --no-fund pdfjs-dist@3.11.174
+
+      - name: 下載報告、擷取並驗算
+        id: extract
+        continue-on-error: true
+        env:
+          REPORTS: ${{ inputs.reports }}
+        run: node scripts/actuarial-extract.js
+
+      - name: 提交結果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/actuarial.json data/raw/actuarial_extract.json
+          if git diff --cached --quiet; then echo "No changes."; else
+            git commit -m "精算報告擷取 $(date -u -d '+8 hours' +'%Y-%m-%d %H:%M')（臺灣時間）"
+            git push
+          fi
+
+      - name: 觸發「更新資料」重建網頁
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run update-data.yml --ref main
+
+      - name: 擷取未全數通過時標示失敗
+        if: steps.extract.outcome == 'failure'
+        run: |
+          echo "有報告未通過驗算，已保留原數字；詳見 data/raw/actuarial_extract.json 與上方記錄。"
+          exit 1
