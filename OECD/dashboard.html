@@ -254,6 +254,35 @@ function add(p) { P.push(p); }
    which the "更新精算報告" workflow fills by parsing the PDF reports. Arrays: civil servants, teachers, military; NT$ 100 million. */
 function actReports() { const a = D && D.actuarial && D.actuarial.data; return ((a && a.reports) || []).slice().sort((x, y) => x.no - y.no); }
 function actLatest() { const r = actReports(); return r[r.length - 1] || null; }
+/* comparison across reports: one metric at a time (units differ), one line per group */
+const HIST = { metric: 'unfunded' };
+try { const s = localStorage.getItem('pension-hist-metric'); if (s) HIST.metric = s; } catch (e) {}
+const HIST_METRICS = [
+  { key: 'unfunded', label: '未提存精算負債', unit: '億元', get: r => r.unfunded, note: '精算負債減去已提存基金，即潛藏負債。' },
+  { key: 'liab', label: '精算負債', unit: '億元', get: r => r.liab, note: '對在職與已退人員未來應給付金額折算到基準日的現值。' },
+  { key: 'funded', label: '已提存基金', unit: '億元', get: r => r.funded, note: '基準日基金實際擁有的資產，未含尚未入帳的年改挹注款。' },
+  { key: 'ratio', label: '已提存比例', unit: '%', get: r => r.fundedRatio, note: '已提存基金占精算負債的比例。' },
+  { key: 'exhaust', label: '基金用罄年度', unit: '民國年', get: r => r.exhaust, note: '累積餘額開始出現負數的年度；沒有數值表示該次精算推估 50 年內不會用罄。' },
+  { key: 'deficit', label: '開始連續收支不足年度', unit: '民國年', get: r => r.deficit || [null, null, null], note: '當年度收入開始連續低於支出的年度；沒有數值表示 50 年內不會出現。' },
+  { key: 'normal', label: '不攤提過去負債的最適費率', unit: '%', get: r => r.rateNormal, now: true, note: '只讓未來年資的成本收支相等的費率，是不再新增未提存負債的最低門檻。' },
+  { key: 'full', label: '攤提過去負債的最適費率', unit: '%', get: r => r.rateFull, now: true, note: '除未來年資成本外，還要分期補足過去未提存負債的費率。' }
+];
+/** panel for one metric; also used to export every metric as its own sheet */
+function actHistPanel(key, forExport) {
+  const R = actReports(); if (R.length < 2) return null;
+  const m = HIST_METRICS.find(x => x.key === key) || HIST_METRICS[0], who = ['公務人員', '教育人員', '軍職人員'];
+  const cols = ['精算次別（基準年）'].concat(who, m.now ? ['現行費率'] : [], ['折現率(%)']);
+  const rows = R.map(r => { const v = m.get(r) || []; return [`第 ${r.no} 次（${r.baseYear + 1911}）`, v[0] ?? null, v[1] ?? null, v[2] ?? null].concat(m.now ? [r.rateNow] : [], [r.discount ?? null]); });
+  const ctl = `<div class="chips" role="group" aria-label="選擇比較的指標">${HIST_METRICS.map(x => `<button class="chip ychip" data-histmetric="${x.key}" aria-pressed="${x.key === m.key}">${esc(x.label)}</button>`).join('')}</div>
+    <div class="toolbar" style="margin-top:8px"><button class="btn" data-histexport="1" title="每個指標一張工作表，各含資料表與可編輯的折線圖">匯出全部指標 Excel（${HIST_METRICS.length} 張表）</button><span class="meta">右上角的「匯出 Excel」只匯出目前顯示的這個指標。</span></div>`;
+  return { id: forExport ? 'act_hist_' + m.key : 'act_hist', tab: 'fund', noCmp: true, wide: true,
+    title: forExport ? `歷次精算－${m.label}` : `歷次精算結果比較：${m.label}`, sub: `單位：${m.unit}；第 ${R[0].no}～${R[R.length - 1].no} 次精算`, unit: m.unit,
+    def: `<p><b>${esc(m.label)}</b>：${esc(m.note)}</p><p><b>解讀時請留意</b>：各次精算的折現率（見資料表最後一欄）、俸額增加率等假設不同，制度也有變動（例如年金改革、新進人員改採個人專戶制），數字不是在同一基礎上算出來的，適合看方向與量級，不宜直接相減當作「惡化了多少」。</p><p>每 3 年才有一次精算，圖上每個點是一次報告。</p>`,
+    controls: forExport ? '' : ctl,
+    src: `退撫基金管理局歷次《退撫基金精算評估報告書》（第 ${R.map(r => r.no).join('、')} 次），由程式自動擷取並通過驗算。`,
+    table: { columns: cols, rows },
+    chart: { type: 'line', series: who.map((w, i) => ({ col: i + 1 })).concat(m.now ? [{ col: 4 }] : []) } };
+}
 /* commentary taken from a specific report; cannot be derived from the tables */
 const ACT_REMARKS = { 9: '報告推估主因為新進人員自 112 年 7 月 1 日起改採個人專戶制、不再參加退撫基金（提前 3～4 年），以及不足額提撥與調薪幅度高於假設（約 2 年）。' };
 /* retirement-age distribution panel: selected years, colour slots, count / share */
@@ -396,12 +425,7 @@ function buildDomestic() {
       src: srcA('「基金不用罄之每年政府撥補金額」「新進人員不繼續參加退撫基金致財務缺口之撥補分析」'),
       table: { columns: ['情境', '公務人員', '教育人員'], rows: A.subsidy },
       chart: { type: 'col', series: [{ col: 1 }, { col: 2 }] } });
-    if (R.length > 1) add({ id: 'act_hist', tab: 'fund', noCmp: true, wide: true, title: '歷次精算結果比較', sub: `單位：億元（圖為未提存精算負債）；第 ${R[0].no}～${A.no} 次精算`, unit: '億元',
-      def: '<p>把歷次精算報告的關鍵結果並列：未提存精算負債、已提存比例、基金用罄年度、不攤提過去負債的最適費率與當時的現行費率。</p><p><b>解讀時請留意</b>：各次精算的折現率、俸額增加率等假設不同，制度也有變動（例如年金改革、新進人員改採個人專戶制），數字不是在同一基礎上算出來的，適合看方向與量級，不宜直接相減當作「惡化了多少」。</p>',
-      src: `退撫基金管理局歷次《退撫基金精算評估報告書》（第 ${R.map(r => r.no).join('、')} 次），由程式自動擷取並通過驗算。`,
-      table: { columns: ['精算次別（基準年）', '公務：未提存負債', '教育：未提存負債', '軍職：未提存負債', '公務：已提存比例(%)', '教育：已提存比例(%)', '軍職：已提存比例(%)', '公務：用罄年度(民國)', '教育：用罄年度(民國)', '公務：不攤提最適費率(%)', '教育：不攤提最適費率(%)', '現行費率(%)', '折現率(%)'],
-        rows: R.map(r => [`第 ${r.no} 次（${r.baseYear + 1911}）`, r.unfunded[0], r.unfunded[1], r.unfunded[2], r.fundedRatio[0], r.fundedRatio[1], r.fundedRatio[2], r.exhaust[0], r.exhaust[1], r.rateNormal[0], r.rateNormal[1], r.rateNow, r.discount == null ? null : r.discount]) },
-      chart: { type: 'col', series: [{ col: 1, name: '公務人員' }, { col: 2, name: '教育人員' }, { col: 3, name: '軍職人員' }] } });
+    const hp = actHistPanel(HIST.metric); if (hp) add(hp);
    }
   }
 
@@ -962,6 +986,13 @@ function rerenderPanel(id) {
   open.forEach(([c, o]) => { const d = ne.querySelector('details.' + c); if (d) d.open = o; });
   if (p.table.rows.length) charts[id] = new Chart(document.getElementById('cv-' + id), chartConfig(p));
 }
+function onHistClick(e) {
+  const m = e.target.closest('[data-histmetric]'), x = e.target.closest('[data-histexport]');
+  if (!m && !x) return false;
+  if (x) { const ps = HIST_METRICS.map(h => actHistPanel(h.key, true)).filter(Boolean); if (ps.length) exportXlsx(ps, `歷次精算結果比較_${stamp()}.xlsx`); return true; }
+  HIST.metric = m.dataset.histmetric; try { localStorage.setItem('pension-hist-metric', HIST.metric); } catch (err) {}
+  rerenderPanel('act_hist'); renderMenu('fund'); return true;
+}
 function onDistClick(e) {
   const m = e.target.closest('[data-distmode]'), y = e.target.closest('[data-distyear]');
   if (!m && !y) return false;
@@ -1345,7 +1376,7 @@ document.getElementById('tabs').addEventListener('keydown', e => {
   e.preventDefault(); showTab(tabs[j].dataset.tab); tabs[j].focus(); tabs[j].scrollIntoView({ block: 'nearest', inline: 'nearest' });
 });
 document.addEventListener('click', e => {
-  if (onDistClick(e) || onLayoutClick(e)) return;
+  if (onHistClick(e) || onDistClick(e) || onLayoutClick(e)) return;
   const b = e.target.closest('[data-export]'); if (b) { const p = P.find(x => x.id === b.dataset.export); if (p) exportXlsx([p], `${p.title}_${stamp()}.xlsx`); }
   const ar = e.target.closest('[data-addrow]'); if (ar) { const t = MAN.tables[+ar.dataset.addrow]; t.rows.push(t.columns.map(() => '')); saveManual(); renderManual(); dirtyDomestic = true; }
   const dr = e.target.closest('[data-delrow]'); if (dr) { const [ti, ri] = dr.dataset.delrow.split(':').map(Number); if (confirm('刪除這一列？')) { MAN.tables[ti].rows.splice(ri, 1); saveManual(); renderManual(); dirtyDomestic = true; } }
