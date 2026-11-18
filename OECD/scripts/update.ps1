@@ -293,8 +293,43 @@ if ($cfg['mocsRetire']) {
   Write-Host ("[{0,-7}] mocs_retire {1}" -f $mocsStatus, $mocsErr)
 }
 
+# ---------- actuarial valuation reports: detect a new report on the fund bureau's list page ----------
+# (the PDF is downloaded and parsed by a separate workflow: scripts\actuarial-extract.js)
+$actWatchFile = Join-Path $rawDir 'actuarial_watch.json'
+$actStatus = 'ok'; $actErr = $null
+if ($cfg['actuarial']) {
+  try {
+    $ac = $cfg['actuarial']
+    $html = Decode-Bytes (Get-Bytes ([string]$ac['listUrl']))
+    $reps = @{}
+    foreach ($m in [regex]::Matches($html, '(?s)<a\b[^>]*href=[''"]([^''"]+)[''"][^>]*>(.*?)</a>')) {
+      $txt = ($m.Groups[2].Value -replace '<[^>]+>', '' -replace '\s+', '')
+      $hit = [regex]::Match($txt, [string]$ac['pattern'])
+      if (-not $hit.Success -or $m.Groups[1].Value -notmatch 'Download\.ashx|\.pdf') { continue }
+      [int]$no = $hit.Groups[1].Value
+      if (-not $reps.ContainsKey($no)) { $reps[$no] = @{ no = [int]$no; title = [string]$txt; url = [string][Net.WebUtility]::HtmlDecode($m.Groups[1].Value) } }
+    }
+    if ($reps.Count -eq 0) { throw 'no actuarial report link matched the pattern' }
+    $rl = [System.Collections.ArrayList]::new(); foreach ($k in ($reps.Keys | Sort-Object)) { [void]$rl.Add($reps[$k]) }
+    [int]$latestNo = ($reps.Keys | Measure-Object -Maximum).Maximum
+    [IO.File]::WriteAllText($actWatchFile, $ser.Serialize(@{ checkedAt = $now; latestNo = $latestNo; reports = $rl }), $utf8)
+  } catch {
+    $actErr = $_.Exception.Message
+    $actStatus = if (Test-Path $actWatchFile) { 'cached' } else { 'missing' }
+  }
+  [void]$results.Add([pscustomobject]@{ key = 'actuarial_watch'; id = 'list'; part = 0; status = $actStatus; error = $actErr })
+  Write-Host ("[{0,-7}] actuarial_watch {1}" -f $actStatus, $actErr)
+}
+
 # ---------- build data\data.js ----------
 $out = @{ generatedAt = $now; repo = [string]$cfg['repo']; sources = @{}; manual = (Read-Json (Join-Path $root 'config\manual.json')) }
+if ($cfg['actuarial']) {
+  $ao = @{ status = $actStatus; error = $actErr; listUrl = [string]$cfg['actuarial']['listUrl']; watch = $null; data = $null; extract = $null }
+  if (Test-Path $actWatchFile) { $ao['watch'] = Read-Json $actWatchFile }
+  $actData = Join-Path $root 'config\actuarial.json'; if (Test-Path $actData) { $ao['data'] = Read-Json $actData }
+  $actExt = Join-Path $rawDir 'actuarial_extract.json'; if (Test-Path $actExt) { $ao['extract'] = Read-Json $actExt }
+  $out['actuarial'] = $ao
+}
 if ($cfg['lawWatch']) {
   $lw = @{ status = $lawStatus; error = $lawErr; watch = $cfg['lawWatch']; data = $null }
   if (Test-Path $lawFile) { $lw['data'] = Read-Json $lawFile }
