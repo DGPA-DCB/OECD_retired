@@ -54,6 +54,12 @@
     "ageTable": "公務人員退休人數按年齡分",
     "minYear": 100
   },
+  "_actuarial說明": "退撫基金精算報告：每次更新讀取退撫基金管理局「基金精算報告書」列表頁，以 pattern 比對連結文字找出最新一次報告，與 config/actuarial.json 已有的次別比較，有新報告就在儀表板提醒。實際下載 PDF、擷取表格與驗算由另一個工作流程「更新精算報告」（scripts/actuarial-extract.js）執行；minNo 為擷取的最早次別（更早的報告格式與制度不同）。",
+  "actuarial": {
+    "listUrl": "https://www.fund.gov.tw/News.aspx?n=3307&sms=11798",
+    "pattern": "退撫基金第(\\d+)次精算報告書",
+    "minNo": 7
+  },
   "_oecd說明": "OECD 查詢代碼以「.」分隔各維度；網址結尾不可是「.」（Windows PowerShell 會自動刪除結尾的點，導致查詢格式錯誤而被拒），所以最後一個維度一律寫明確的值。",
   "oecd": [
     { "key": "oecd_pag",  "label": "OECD Pensions at a Glance（所得替代率〔低薪／平均／高薪〕、退休年齡、老年貧窮、年金支出）",
