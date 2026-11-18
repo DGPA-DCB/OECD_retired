@@ -58,7 +58,8 @@ section.tab.active { display: block; }
 .card h3 { margin: 0; font-size: 16px; }
 .card .sub { color: var(--text-secondary); font-size: 13px; margin: 2px 0 10px; }
 .card .src { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
-.card-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.card-head > div:first-child { flex: 1 1 220px; min-width: 0; }   /* title keeps its width; the buttons wrap below it on narrow screens */
 .chart-box { position: relative; width: 100%; height: 300px; }
 details.tbl { margin-top: 10px; }
 details.tbl summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
@@ -248,6 +249,18 @@ const col = (h, re) => h.findIndex(x => re.test(x));
    panel = { id, tab, title, sub, src, wide, table:{columns, rows}, chart:{type:'line'|'col'|'colStacked'|'barh', series:[{col,name}], unit, highlight?} } */
 const P = [];
 function add(p) { P.push(p); }
+/* Actuarial valuation of the pension fund. Published every 3 years as a PDF, so the figures are entered by hand here.
+   Order within arrays: civil servants, teachers, military. Amounts in NT$ 100 million. */
+const ACTUARIAL = {
+  no: 9, baseDate: '112 年 12 月 31 日', discount: 4.5, rateNow: 15,
+  source: '退撫基金管理局《退撫基金第 9 次精算評估報告書》（114 年 4 月，擎天駒管理顧問）',
+  liab: [17311.16, 16028.55, 4499.26], funded: [4611.56, 2731.30, 945.29],
+  rateFull: [41.47, 51.99, 16.31], rateNormal: [17.74, 15.93, 8.14], needReturn: [9.15, 10.72, 3.53],
+  exhaust: [134, 131, null], prevExhaust: [140, 137, null], exhaustIfJoin: [138, 134, null], deficit: [122, 121, 144],
+  balYears: [117, 122, 132, 142, 152, 162],
+  bal: [[5557, 5904, 1074, -10978, -25502, -36915], [3500, 3612, -1553, -12566, -23106, -29678], [1903, 2556, 3390, 3703, 3607, 3516]],
+  subsidy: [['補新人缺口：分 10 年', 201, 136], ['補新人缺口：分 15 年', 149, 100], ['補新人缺口：分 20 年', 123, 83], ['30 年基金不用罄', 224, 274], ['50 年基金不用罄', 428, 390]]
+};
 /* retirement-age distribution panel: selected years, colour slots, count / share */
 const DIST = { years: [], slot: {}, mode: 'n' };
 try { const s = JSON.parse(localStorage.getItem('pension-dist-v1') || 'null'); if (s && Array.isArray(s.years)) { DIST.years = s.years.map(Number); DIST.slot = s.slot || {}; DIST.mode = s.mode === 'pct' ? 'pct' : 'n'; } } catch (e) {}
@@ -359,6 +372,31 @@ function buildDomestic() {
         table: { columns: ['年齡'].concat(selA.map(a => a.ad + ' 年')), rows: ages.map((age, i) => [age + '歲' + (i === 0 ? '以下' : i === ages.length - 1 ? '以上' : '')].concat(selA.map(a => val(a, age)))) },
         chart: { type: selA.length > 1 ? 'line' : 'col', series: selA.map((a, i) => ({ col: i + 1 })), slots: selA.map(a => DIST.slot[a.ad]), min: 0 } });
     }
+  }
+
+  /* --- actuarial valuation (static figures from the triennial report; update ACTUARIAL when the next report is published) --- */
+  { const A = ACTUARIAL, who = ['公務人員', '教育人員', '軍職人員'];
+    const srcA = t => `${A.source}${t}。精算結果隨折現率等假設變動，報告載明所提方案僅供參考、不作為政策擬訂依據。報告依 112 年 1 月修正之退撫法規精算，其後的修法影響未納入。`;
+    add({ id: 'act_fund', tab: 'fund', noCmp: true, title: `退撫基金提存狀況（第 ${A.no} 次精算）`, sub: `單位：億元；精算基準日 ${A.baseDate}，折現率 ${A.discount}%`, unit: '億元',
+      def: '<p><b>精算負債</b>：依制度規定，對在職與已退人員未來應給付金額折算到基準日的現值（加入年齡成本法）。</p><p><b>已提存基金</b>：基準日基金實際擁有的資產，未含尚未入帳的年金改革挹注款。</p><p><b>未提存精算負債</b>＝精算負債－已提存基金，即主計總處公布的「潛藏負債」。四類人員合計 2.96 兆元；扣除年改節省挹注款現值 0.98 兆元後，財務缺口約 1.98 兆元。</p>',
+      src: srcA('表 6-7、6-14、6-20（摘要第七項）'),
+      table: { columns: ['身分別', '已提存基金', '未提存精算負債', '精算負債合計', '已提存比例(%)'], rows: who.map((w, i) => [w, A.funded[i], r2(A.liab[i] - A.funded[i], 2), A.liab[i], Math.round(A.funded[i] / A.liab[i] * 100)]) },
+      chart: { type: 'colStacked', series: [{ col: 1 }, { col: 2 }] } });
+    add({ id: 'act_rate', tab: 'fund', noCmp: true, title: `最適提撥費率與現行費率（第 ${A.no} 次精算）`, sub: '單位：%', unit: '%',
+      def: '<p><b>攤提過去負債的最適費率</b>：除了支應未來年資的成本，還要在未來分期補足過去累積的未提存負債。</p><p><b>不攤提過去負債的最適費率</b>：只讓「未來年資的成本」收支相等，是不再新增未提存負債的最低門檻。依退撫法第 8 條，這個費率超過現行費率 1.5 倍時應調高費率至少 1 個百分點；目前公務人員 1.18 倍、教育人員 1.06 倍，未達門檻。</p><p>軍職人員為含新進人員的合併團體費率；公教新進人員自 112 年 7 月 1 日起改採個人專戶制，僅計算原團體。</p>',
+      src: srcA('表 9-1、9-3、9-11'),
+      table: { columns: ['身分別', '攤提過去負債', '不攤提過去負債', '現行費率', '維持現行費率所需投資報酬率'], rows: who.map((w, i) => [w, A.rateFull[i], A.rateNormal[i], A.rateNow, A.needReturn[i]]) },
+      chart: { type: 'col', series: [{ col: 1 }, { col: 2 }, { col: 3 }] } });
+    add({ id: 'act_bal', tab: 'fund', noCmp: true, wide: true, title: `退撫基金累積餘額推估（第 ${A.no} 次精算）`, sub: `單位：億元；提撥費率維持 ${A.rateNow}%、含年改挹注款；負值表示基金已用罄後的累計缺口`, unit: '億元',
+      def: `<p><b>累積餘額推估</b>：在現行制度與精算假設下，各年底基金餘額的推估值。餘額轉為負數的年度即「基金用罄年度」：公務人員民國 ${A.exhaust[0]} 年、教育人員 ${A.exhaust[1]} 年，軍職人員 50 年內不會用罄。</p><p>當年度開始連續收支不足的年度更早：公務人員 ${A.deficit[0]} 年、教育人員 ${A.deficit[1]} 年、軍職人員 ${A.deficit[2]} 年。</p><p>與第 ${A.no - 1} 次精算相比，公教用罄年度各提前 6 年（公務 ${A.prevExhaust[0]}→${A.exhaust[0]} 年、教育 ${A.prevExhaust[1]}→${A.exhaust[1]} 年）。報告推估主因為新進人員改採個人專戶制（提前 3～4 年），以及不足額提撥與調薪幅度高於假設（約 2 年）。</p><p>圖上只有報告列出的 6 個年度，年度間距不等（第一段 5 年，其餘 10 年）。</p>`,
+      src: srcA('表 9-8、9-9'),
+      table: { columns: ['年底'].concat(who), rows: A.balYears.map((y, i) => [`民國${y}年（${y + 1911}）`, A.bal[0][i], A.bal[1][i], A.bal[2][i]]) },
+      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }, { col: 3 }] } });
+    add({ id: 'act_sub', tab: 'fund', noCmp: true, title: `政府每年撥補金額試算（第 ${A.no} 次精算）`, sub: `單位：億元／年；提撥費率 ${A.rateNow}%`, unit: '億元',
+      def: `<p><b>補足新人不參加基金的缺口</b>：依退撫法第 93 條、退撫條例第 98 條，新進人員不再參加退撫基金致用罄年度提前的缺口由政府撥補。目標是把用罄年度推回新進人員繼續參加時的水準（公務 ${A.exhaust[0]}→${A.exhaustIfJoin[0]} 年、教育 ${A.exhaust[1]}→${A.exhaustIfJoin[1]} 年），可分 10、15、20 年撥補。</p><p><b>30／50 年基金不用罄</b>：讓基金在未來 30 年或 50 年內都不用罄，政府每年需撥補的金額。第 ${A.no - 1} 次精算在同一基礎下，30 年不用罄為公務 95 億元、教育 111 億元。</p>`,
+      src: srcA('表 9-10、9-13、9-14'),
+      table: { columns: ['情境', '公務人員', '教育人員'], rows: A.subsidy },
+      chart: { type: 'col', series: [{ col: 1 }, { col: 2 }] } });
   }
 
   /* --- 公保 --- */
@@ -821,7 +859,7 @@ function cardHTML(p) {
   const h = p.tall ? Math.max(300, p.table.rows.length * (p.chart.series.length > 1 ? 22 : 16) + 60) : 300;
   return `<article class="card${(p.tall && p.table.rows.length > 12) || p.wide ? ' wide' : ''}" id="card-${p.id}" data-dropid="${p.id}" data-ptab="${p.tab}">
     <div class="card-head"><div><h3><span class="grip" draggable="true" data-pid="${p.id}" data-ptab="${p.tab}" title="拖曳調整順序" aria-hidden="true">⠿</span>${esc(p.title)}</h3><div class="sub">${esc(p.sub || '')}</div></div>
-    <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end"><button class="btn" data-move="-1" data-mid="${p.id}" title="往前移一格" aria-label="${esc(p.title)} 往前移">◀</button><button class="btn" data-move="1" data-mid="${p.id}" title="往後移一格" aria-label="${esc(p.title)} 往後移">▶</button><button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button><button class="btn" data-hide="${p.id}" title="隱藏此指標（可從上方指標選單再打開）" aria-label="隱藏 ${esc(p.title)}">隱藏</button></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:100%"><button class="btn" data-move="-1" data-mid="${p.id}" title="往前移一格" aria-label="${esc(p.title)} 往前移">◀</button><button class="btn" data-move="1" data-mid="${p.id}" title="往後移一格" aria-label="${esc(p.title)} 往後移">▶</button><button class="btn" data-export="${p.id}" title="匯出此表與可編輯圖表">匯出 Excel</button><button class="btn" data-hide="${p.id}" title="隱藏此指標（可從上方指標選單再打開）" aria-label="隱藏 ${esc(p.title)}">隱藏</button></div></div>
     ${p.def ? `<details class="def"><summary>指標定義</summary><div class="def-body">${p.def}</div></details>` : ''}
     ${p.controls || ''}
     ${p.table.rows.length ? `<div class="chart-box" style="height:${h}px"><canvas id="cv-${p.id}" role="img" aria-label="${esc(p.title)}"></canvas></div>` : '<div class="empty">此來源目前沒有資料</div>'}
@@ -941,6 +979,7 @@ function renderKPIs() {
     (f ? kpi('退撫基金本年累計收益率', fmt(f.f) + '<small>%</small>', `民國 ${f.ym.roc} 止`) : '') +
     (lastMem ? kpi('退撫基金參加人數', fmt(lastMem[4], 0) + ' <small>人</small>', `公 ${fmt(lastMem[1], 0)}／教 ${fmt(lastMem[2], 0)}／軍 ${fmt(lastMem[3], 0)}（${lastMem[0]}）`) : '') +
     (lastFl ? kpi('累計收繳減撥付', fmt(lastFl[3], 0) + ' <small>億元</small>', `收繳 ${fmt(lastFl[1], 0)}／撥付 ${fmt(lastFl[2], 0)}（${lastFl[0]}）`) : '') +
+    kpi('基金用罄年度（精算推估）', `公務 ${ACTUARIAL.exhaust[0]} <small>年</small>・教育 ${ACTUARIAL.exhaust[1]} <small>年</small>`, `第 ${ACTUARIAL.no} 次精算，基準日 ${ACTUARIAL.baseDate}；軍職 50 年內不會用罄`) +
     (D._retAge ? kpi('公務人員平均退休年齡', fmt(D._retAge.avg, 1) + ' <small>歲</small>', `${D._retAge.ad} 年，退休 ${fmt(D._retAge.n, 0)} 人；銓敘統計年報`) : '') +
     kpi('退撫提撥費率（公務人員）', esc(mi('fund_rate_civil').value || '—') + '<small>%</small>', (mi('fund_rate_civil').auto ? `退撫基金管理局公告，${esc(mi('fund_rate_civil').effective)} 起` : '人工確認參數') + '；分擔 ' + esc(mi('fund_rate_share').value || '') + '（個人／政府）' + alertNote('fund_rate_civil'), statusBadge(mi('fund_rate_civil').status));
   const la = P.find(p => p.id === 'li_avg'); const liAvg = la && [...la.table.rows].reverse().find(r => r[1] != null);
@@ -1177,7 +1216,7 @@ function colUnit(p, name) {
 function cmpCatalog() {
   const out = [];
   P.forEach(p => {
-    if (!p.table.rows.length || (p.chart && p.chart.type === 'barh')) return;
+    if (p.noCmp || !p.table.rows.length || (p.chart && p.chart.type === 'barh')) return;
     const tk = p.table.rows.map(r => timeKey(r[0]));
     if (tk.some(x => !x) || new Set(tk.map(x => x.f)).size !== 1) return;
     const f = tk[0].f;
