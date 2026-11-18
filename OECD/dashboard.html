@@ -41,9 +41,10 @@ header.top { position: sticky; top: 0; z-index: 10; background: var(--surface-1)
 .top-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0 6px; }
 .top-row h1 { font-size: 20px; margin: 0; flex: 1 1 auto; }
 .meta { color: var(--text-secondary); font-size: 13px; }
-nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 0; }
-nav.tabs button { border: 0; background: none; color: var(--text-secondary); font: inherit; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
-nav.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 0; }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tabs button { border: 0; background: none; color: var(--text-secondary); font: inherit; padding: 8px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
 button.btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface-1); color: var(--text-primary); cursor: pointer; }
 button.btn:hover { background: var(--surface-2); }
 button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -115,16 +116,16 @@ details.def .def-body b { color: var(--text-primary); }
       <h1>退撫與年金指標儀表板</h1>
       <span class="meta" id="meta"></span>
       <button class="btn" id="updateBtn" title="重新抓取所有來源資料">更新資料</button>
-      <button class="btn primary" id="exportAll" title="匯出所有表格與可編輯的 Excel 圖表">匯出全部 Excel</button>
+      <button class="btn primary" id="exportAll" title="匯出各分頁目前打開的指標（依畫面順序），含表格與可編輯的 Excel 圖表">匯出全部 Excel</button>
     </div>
-    <nav class="tabs" role="tablist" id="tabs">
-      <button role="tab" data-tab="fund" aria-selected="true">退撫與退休基金</button>
-      <button role="tab" data-tab="ins">社會保險費率與津貼</button>
-      <button role="tab" data-tab="oecd">OECD 國際比較</button>
-      <button role="tab" data-tab="cmp">跨指標比較</button>
-      <button role="tab" data-tab="manual">人工確認參數</button>
-      <button role="tab" data-tab="sources">資料來源與更新</button>
-    </nav>
+    <div class="tabs" role="tablist" aria-label="儀表板分頁" id="tabs">
+      <button role="tab" id="tabbtn-fund" data-tab="fund" aria-controls="tab-fund" aria-selected="true">退撫與退休基金</button>
+      <button role="tab" id="tabbtn-ins" data-tab="ins" aria-controls="tab-ins" aria-selected="false" tabindex="-1">社會保險費率與津貼</button>
+      <button role="tab" id="tabbtn-oecd" data-tab="oecd" aria-controls="tab-oecd" aria-selected="false" tabindex="-1">OECD 國際比較</button>
+      <button role="tab" id="tabbtn-cmp" data-tab="cmp" aria-controls="tab-cmp" aria-selected="false" tabindex="-1">跨指標比較</button>
+      <button role="tab" id="tabbtn-manual" data-tab="manual" aria-controls="tab-manual" aria-selected="false" tabindex="-1">人工確認參數</button>
+      <button role="tab" id="tabbtn-sources" data-tab="sources" aria-controls="tab-sources" aria-selected="false" tabindex="-1">資料來源與更新</button>
+    </div>
   </div>
 </header>
 <main class="wrap">
@@ -198,8 +199,9 @@ details.def .def-body b { color: var(--text-primary); }
 </main>
 
 <script src="data/data.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- integrity: the browser refuses to run these files if their content ever differs from the pinned hash. When changing a version, take the new hash from https://cdnjs.com (Copy SRI). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha512-CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 'use strict';
 const D = window.PENSION_DATA;
@@ -1271,14 +1273,21 @@ document.getElementById('cmpExport').onclick = () => { const p = cmpPanel(); if 
 
 /* ---------------- tabs & init ---------------- */
 function showTab(t) {
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
-  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + t));
+  document.querySelectorAll('#tabs button').forEach(b => { const on = b.dataset.tab === t; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });   // roving tabindex: only the selected tab is in the Tab order
+  document.querySelectorAll('section.tab').forEach(s => { s.classList.toggle('active', s.id === 'tab-' + t); s.setAttribute('role', 'tabpanel'); s.setAttribute('aria-labelledby', 'tabbtn-' + s.id.slice(4)); });
   if ((t === 'fund' || t === 'ins') && dirtyDomestic) { rebuildAll(); rendered.fund = rendered.ins = false; renderKPIs(); dirtyDomestic = false; }
   if (t === 'cmp') { if (dirtyDomestic) { rebuildAll(); dirtyDomestic = false; rendered.fund = rendered.ins = false; renderKPIs(); } renderCmp(); }
   else renderTab(t);
   try { localStorage.setItem('pension-tab', t); } catch (e) {}
 }
 document.getElementById('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(b.dataset.tab); });
+/* keyboard: Left/Right move between tabs, Home/End jump to the first/last */
+document.getElementById('tabs').addEventListener('keydown', e => {
+  const tabs = [...document.querySelectorAll('#tabs button[data-tab]')], i = tabs.indexOf(document.activeElement); if (i < 0) return;
+  const j = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+  if (j < 0) return;
+  e.preventDefault(); showTab(tabs[j].dataset.tab); tabs[j].focus(); tabs[j].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+});
 document.addEventListener('click', e => {
   if (onDistClick(e) || onLayoutClick(e)) return;
   const b = e.target.closest('[data-export]'); if (b) { const p = P.find(x => x.id === b.dataset.export); if (p) exportXlsx([p], `${p.title}_${stamp()}.xlsx`); }
@@ -1289,7 +1298,9 @@ document.getElementById('exportAll').onclick = () => {
   if (!D) return;
   rebuildAll();
   const cp = cmpPanel(); const extra = cp.table.columns.length > 1 ? [cp] : [];
-  exportXlsx([...P.filter(p => p.tab === 'fund'), ...P.filter(p => p.tab === 'ins'), ...P.filter(p => p.tab === 'oecd'), ...extra, ...manualPanels(), sourcesPanel()], `退撫與年金指標_${stamp()}.xlsx`);
+  const shown = ['fund', 'ins', 'oecd'].flatMap(t => orderedPanels(t).filter(p => !isHidden(p)));   // only the opened cards, in the user's order
+  if (!shown.length && !confirm('目前三個指標分頁都沒有打開任何指標，只會匯出跨指標比較、人工確認參數與資料來源。要繼續嗎？')) return;
+  exportXlsx([...shown, ...extra, ...manualPanels(), sourcesPanel()], `退撫與年金指標_${stamp()}.xlsx`);
 };
 /* update button: online (GitHub Pages) -> run the GitHub Actions workflow; local file -> run the .bat */
 document.getElementById('updateBtn').onclick = () => {
