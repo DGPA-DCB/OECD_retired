@@ -1,0 +1,37 @@
+{
+  "at": "2026-11-18 10:43:18",
+  "listUrl": "https://www.fund.gov.tw/News.aspx?n=3307&sms=11798",
+  "results": [
+    {
+      "no": 7,
+      "title": "退撫基金第7次精算報告書",
+      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzE3Mjg5Lzc3NmVlYWYwLWE4N2QtNGUwNy1hNWVhLTBjYTNjZWY5YjM0Mi5wZGY%3d&n=OTUyMzEzMzY1MDcxLnBkZg%3d%3d&icon=.pdf",
+      "status": "ok",
+      "errors": [],
+      "pages": 296,
+      "chars": 513449,
+      "notes": []
+    },
+    {
+      "no": 8,
+      "title": "退撫基金第8次精算報告書",
+      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzE5MDQyL2ZkZjY1NTczLTcwOGUtNDkxZi1iM2E0LWY5OWNjMjFmMGNjOC5wZGY%3d&n=6YCA5pKr5Z%2b66YeR56ysOOasoeeyvueul%2bWgseWRiuabuC5wZGY%3d&icon=.pdf",
+      "status": "ok",
+      "errors": [],
+      "pages": 318,
+      "chars": 527268,
+      "notes": []
+    },
+    {
+      "no": 9,
+      "title": "退撫基金第9次精算報告書",
+      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzIwNTg2LzRiMmFkNTE1LTRmNDQtNGM2My05YjMzLTBjYmUzYjEwNDM5Mi5wZGY%3d&n=6YCA5pKr5Z%2b66YeR56ysOeasoeeyvueul%2bWgseWRiuabuC5wZGY%3d&icon=.pdf",
+      "status": "ok",
+      "errors": [],
+      "pages": 311,
+      "chars": 527216,
+      "notes": []
+    }
+  ],
+  "latestNo": 9
+}
