@@ -51,13 +51,26 @@
     if (t >= 0) {
       var unit = 1, u = rowAfter(t, /單位/, 4);
       if (u >= 0) { if (/百萬元/.test(sq[u])) unit = 100; else if (/億元/.test(sq[u])) unit = 1; else if (/元/.test(sq[u])) unit = 1e8; }
-      out.liab = []; out.funded = []; out.unfunded = []; out.fundedRatio = [];
+      out.liab = []; out.funded = []; out.unfunded = []; out.fundedRatio = []; out.payroll = []; out.unfundedToPayroll = [];
       GROUPS.forEach(function (g) {
         var r = rowAfter(t, new RegExp('^' + g), 16), v = r >= 0 ? nums(lines[r]) : [];
         out.liab.push(v.length >= 4 ? r2(v[0] / unit) : null); out.funded.push(v.length >= 4 ? r2(v[1] / unit) : null);
         out.unfunded.push(v.length >= 4 ? r2(v[2] / unit) : null); out.fundedRatio.push(v.length >= 4 ? v[3] : null);
+        out.payroll.push(v.length >= 6 ? r2(v[4] / unit) : null); out.unfundedToPayroll.push(v.length >= 6 ? v[5] : null);
       });
+      if (out.payroll.some(function (x) { return x == null; })) { delete out.payroll; delete out.unfundedToPayroll; }
     } else notes.push('funding table not found');
+
+    /* 1b. head counts and liability split between benefit recipients and active members (optional) */
+    t = table(/^表\d+-\d+身[分份]別精算負債彙總表/);
+    if (t >= 0) {
+      var rp = rowAfter(t, /^領取給付人員/, 10), ra = rowAfter(t, /^在職人員/, 10);
+      var vp = rp >= 0 ? nums(lines[rp]) : [], va = ra >= 0 ? nums(lines[ra]) : [];
+      if (vp.length >= 6 && va.length >= 6) {
+        out.pensioners = [vp[0], vp[2], vp[4]]; out.pensionerLiab = [vp[1], vp[3], vp[5]];
+        out.actives = [va[0], va[2], va[4]]; out.activeLiab = [va[1], va[3], va[5]];
+      }
+    }
 
     /* 2. optimal contribution rates vs the current rate */
     t = table(/未提存負債最適提撥率相對現行提撥費?率倍數/);
@@ -74,6 +87,10 @@
     /* 3. investment return needed to stay balanced at the current rate (optional) */
     t = table(/^表\d+-\d+攤提過去負債基礎下最適提撥率彙總表/);
     if (t >= 0) {
+      /* components of the full rate for the closed group: amortisation of the unfunded liability + future service cost (optional) */
+      var pct3of = function (r) { if (r < 0) return null; var c = cells(lines[r]).filter(function (x) { return /%$/.test(x); }).map(num); return c.length === 3 ? c : null; };
+      var am = pct3of(rowAfter(t, /^未提撥精算負債攤[提銷]數/, 6)), sv = pct3of(rowAfter(t, /未來服務成本/, 6));
+      if (am && sv) { out.rateAmort = am; out.rateService = sv; }
       var s = rowAfter(t, /應達成之投資/, 14);
       for (var j = s; s >= 0 && j <= s + 3 && !out.needReturn; j++) {
         var seg = j === s ? lines[j].slice(lines[j].indexOf('投資') + 2) : lines[j];
@@ -100,6 +117,8 @@
     /* 5. present value of the pension-reform savings transferred to the fund (optional) */
     t = table(/年金改革挹注款彙總表/);
     if (t >= 0) {
+      var tot = rowAfter(t, /^年金改革後節省挹注款$/, 8);
+      for (var w0 = tot; tot >= 0 && w0 <= tot + 3 && !out.reformTotal; w0++) { var v0 = nums(lines[w0]).filter(function (x) { return x != null; }); if (v0.length >= 3) out.reformTotal = v0.slice(0, 3); }
       var pv = rowAfter(t, /挹注款現值/, 12);
       for (var w = pv; pv >= 0 && w <= pv + 3 && !out.reformPV; w++) { var v3 = nums(lines[w]).filter(function (x) { return x != null; }); if (v3.length >= 3) out.reformPV = v3.slice(0, 3); }
       var dr = rowAfter(t, /折現率[\d.]+%/, 12); if (dr >= 0) out.discount = parseFloat(sq[dr].match(/折現率([\d.]+)%/)[1]);
@@ -167,6 +186,19 @@
       }
     }
     if (arr3('deficit', true) && Array.isArray(a.exhaust)) for (var h = 0; h < 3; h++) if (is(a.deficit[h]) && is(a.exhaust[h]) && a.deficit[h] > a.exhaust[h]) err.push(GROUPS[h] + '：收支不足年度晚於用罄年度');
+    if (a.pensioners) {
+      for (var p = 0; p < 3; p++) {
+        if (![a.pensioners[p], a.actives[p], a.pensionerLiab[p], a.activeLiab[p]].every(is) || a.pensioners[p] <= 0 || a.actives[p] <= 0) { err.push(GROUPS[p] + '：人數或分項精算負債讀取異常'); continue; }
+        if (Array.isArray(a.liab) && is(a.liab[p]) && Math.abs(a.pensionerLiab[p] + a.activeLiab[p] - a.liab[p]) > 2.5) err.push(GROUPS[p] + '：領取給付人員＋在職人員的精算負債 ≠ 精算負債合計');
+      }
+    }
+    if (a.payroll) for (var y = 0; y < 3; y++) {
+      if (!is(a.payroll[y]) || a.payroll[y] <= 0) { err.push(GROUPS[y] + '：涵蓋薪資讀取異常'); continue; }
+      if (Array.isArray(a.unfunded) && is(a.unfunded[y]) && is(a.unfundedToPayroll[y]) && Math.abs(a.unfunded[y] / a.payroll[y] * 100 - a.unfundedToPayroll[y]) > 1.5) err.push(GROUPS[y] + '：未提存負債對涵蓋薪資比例與金額不符');
+    }
+    if (a.rateAmort) for (var z = 0; z < 3; z++) if (![a.rateAmort[z], a.rateService[z]].every(is) || a.rateAmort[z] < 0 || a.rateService[z] <= 0 || a.rateAmort[z] > 100 || a.rateService[z] > 100) err.push(GROUPS[z] + '：費率組成讀取異常');
+    ['reformPV', 'reformTotal'].forEach(function (k) { if (a[k] && (a[k].length !== 3 || a[k].some(function (v) { return !is(v) || v <= 0 || v > 100000; }))) err.push(k + ' 讀取異常'); });
+    if (a.reformPV && a.reformTotal) for (var q2 = 0; q2 < 3; q2++) if (a.reformPV[q2] > a.reformTotal[q2]) err.push(GROUPS[q2] + '：挹注款現值大於合計數');
     if (a.needReturn && (a.needReturn.length !== 3 || a.needReturn.some(function (v) { return !is(v) || v < 0 || v > 30; }))) err.push('所需投資報酬率讀取異常');
     if (a.subsidy) a.subsidy.forEach(function (r) { if (!is(r[1]) || !is(r[2]) || r[1] <= 0 || r[2] <= 0 || r[1] > 5000 || r[2] > 5000) err.push('撥補金額「' + r[0] + '」讀取異常'); });
     return err;
