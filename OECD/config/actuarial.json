@@ -25,6 +25,36 @@
         17,
         5
       ],
+      "payroll": [
+        2303.6,
+        1812.52,
+        784.49
+      ],
+      "unfundedToPayroll": [
+        418,
+        565,
+        396
+      ],
+      "pensioners": [
+        148888,
+        120589,
+        64154
+      ],
+      "pensionerLiab": [
+        6161,
+        5943,
+        2203
+      ],
+      "actives": [
+        293992,
+        183350,
+        162215
+      ],
+      "activeLiab": [
+        7085,
+        6427,
+        1079
+      ],
       "rateFull": [
         26.27,
         30.24,
@@ -36,6 +66,16 @@
         6.79
       ],
       "rateNow": 12,
+      "rateAmort": [
+        20.5,
+        25.49,
+        14
+      ],
+      "rateService": [
+        17.43,
+        16.67,
+        7.47
+      ],
       "needReturn": [
         8.1,
         8.9,
@@ -85,6 +125,11 @@
         129,
         null
       ],
+      "reformTotal": [
+        7608,
+        8906,
+        3589
+      ],
       "reformPV": [
         3665,
         4303,
@@ -92,8 +137,8 @@
       ],
       "discount": 4,
       "title": "退撫基金第7次精算報告書",
-      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzE3Mjg5Lzc3NmVlYWYwLWE4N2QtNGUwNy1hNWVhLTBjYTNjZWY5YjM0Mi5wZGY%3d&n=OTUyMzEzMzY1MDcxLnBkZg%3d%3d&icon=.pdf",
-      "extractedAt": "2026-11-18 10:43:18",
+      "url": "https://www.fund.gov.tw/News.aspx?n=3307&sms=11798",
+      "extractedAt": "2026-11-19 00:00:00",
       "method": "auto"
     },
     {
@@ -120,6 +165,36 @@
         16,
         12
       ],
+      "payroll": [
+        2536.94,
+        1939.38,
+        898.62
+      ],
+      "unfundedToPayroll": [
+        421,
+        578,
+        361
+      ],
+      "pensioners": [
+        164533,
+        129186,
+        70278
+      ],
+      "pensionerLiab": [
+        6916,
+        6383,
+        2417
+      ],
+      "actives": [
+        311243,
+        184290,
+        179126
+      ],
+      "activeLiab": [
+        7670,
+        6983,
+        1267
+      ],
       "rateFull": [
         26.78,
         29.07,
@@ -131,6 +206,16 @@
         7.84
       ],
       "rateNow": 13,
+      "rateAmort": [
+        18.7,
+        25.76,
+        13.96
+      ],
+      "rateService": [
+        17.09,
+        15.23,
+        8.39
+      ],
       "needReturn": [
         6.2,
         6.9,
@@ -180,6 +265,11 @@
         137,
         null
       ],
+      "reformTotal": [
+        7885,
+        9564,
+        2615
+      ],
       "reformPV": [
         4323,
         5155,
@@ -187,8 +277,8 @@
       ],
       "discount": 4,
       "title": "退撫基金第8次精算報告書",
-      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzE5MDQyL2ZkZjY1NTczLTcwOGUtNDkxZi1iM2E0LWY5OWNjMjFmMGNjOC5wZGY%3d&n=6YCA5pKr5Z%2b66YeR56ysOOasoeeyvueul%2bWgseWRiuabuC5wZGY%3d&icon=.pdf",
-      "extractedAt": "2026-11-18 10:43:18",
+      "url": "https://www.fund.gov.tw/News.aspx?n=3307&sms=11798",
+      "extractedAt": "2026-11-19 00:00:00",
       "method": "auto"
     },
     {
@@ -215,6 +305,36 @@
         17,
         21
       ],
+      "payroll": [
+        2635.31,
+        2016.63,
+        921.82
+      ],
+      "unfundedToPayroll": [
+        482,
+        659,
+        386
+      ],
+      "pensioners": [
+        179844,
+        138348,
+        82095
+      ],
+      "pensionerLiab": [
+        8217,
+        7471,
+        2990
+      ],
+      "actives": [
+        304495,
+        179274,
+        170663
+      ],
+      "activeLiab": [
+        9094,
+        8558,
+        1509
+      ],
       "rateFull": [
         41.47,
         51.99,
@@ -226,6 +346,16 @@
         8.14
       ],
       "rateNow": 15,
+      "rateAmort": [
+        23.73,
+        36.06,
+        18.25
+      ],
+      "rateService": [
+        17.74,
+        15.93,
+        8.61
+      ],
       "needReturn": [
         9.15,
         10.72,
@@ -275,6 +405,11 @@
         131,
         null
       ],
+      "reformTotal": [
+        7001,
+        7956,
+        2380
+      ],
       "reformPV": [
         3939,
         4376,
@@ -314,8 +449,8 @@
         null
       ],
       "title": "退撫基金第9次精算報告書",
-      "url": "https://ws.fund.gov.tw/Download.ashx?u=LzAwMS9VcGxvYWQvOC9yZWxmaWxlLzExNzk4LzIwNTg2LzRiMmFkNTE1LTRmNDQtNGM2My05YjMzLTBjYmUzYjEwNDM5Mi5wZGY%3d&n=6YCA5pKr5Z%2b66YeR56ysOeasoeeyvueul%2bWgseWRiuabuC5wZGY%3d&icon=.pdf",
-      "extractedAt": "2026-11-18 10:43:18",
+      "url": "https://www.fund.gov.tw/News.aspx?n=3307&sms=11798",
+      "extractedAt": "2026-11-19 00:00:00",
       "method": "auto"
     }
   ]
