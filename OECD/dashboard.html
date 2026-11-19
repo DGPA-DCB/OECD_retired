@@ -265,16 +265,31 @@ const HIST_METRICS = [
   { key: 'exhaust', label: '基金用罄年度', unit: '民國年', get: r => r.exhaust, note: '累積餘額開始出現負數的年度；沒有數值表示該次精算推估 50 年內不會用罄。' },
   { key: 'deficit', label: '開始連續收支不足年度', unit: '民國年', get: r => r.deficit || [null, null, null], note: '當年度收入開始連續低於支出的年度；沒有數值表示 50 年內不會出現。' },
   { key: 'normal', label: '不攤提過去負債的最適費率', unit: '%', get: r => r.rateNormal, now: true, note: '只讓未來年資的成本收支相等的費率，是不再新增未提存負債的最低門檻。' },
-  { key: 'full', label: '攤提過去負債的最適費率', unit: '%', get: r => r.rateFull, now: true, note: '除未來年資成本外，還要分期補足過去未提存負債的費率。' }
+  { key: 'full', label: '攤提過去負債的最適費率', unit: '%', get: r => r.rateFull, now: true, note: '除未來年資成本外，還要分期補足過去未提存負債的費率。' },
+  { key: 'normalX', label: '不攤提費率相對現行費率倍數', unit: '倍', get: r => r.rateNormal.map(v => r2(v / r.rateNow, 2)), note: '不攤提過去負債的最適費率除以當時的現行費率。依退撫法第 8 條，達 1.5 倍以上時應調高費率至少 1 個百分點。' },
+  { key: 'service', label: '原團體未來服務成本費率', unit: '%', get: r => r.rateService, now: true, note: '現有成員未來年資所需的成本占薪資的比率，只受制度影響，與過去累積的未提存負債無關。' },
+  { key: 'amort', label: '原團體未提存負債攤提費率', unit: '%', get: r => r.rateAmort, note: '為了在未來分期補足過去累積的未提存負債，另外需要的費率。' },
+  { key: 'needReturn', label: '維持現行費率所需投資報酬率', unit: '%', get: r => r.needReturn, note: '提撥費率不調整時，基金要達到這個長期投資報酬率才能支應未來 50 年的收支平衡（攤提過去負債基礎）。' },
+  { key: 'payroll', label: '涵蓋薪資', unit: '億元', get: r => r.payroll, note: '參加基金的在職人員作為提撥基礎的全年薪資總額。' },
+  { key: 'u2p', label: '未提存負債對涵蓋薪資比例', unit: '%', get: r => r.unfundedToPayroll, note: '未提存精算負債除以涵蓋薪資；例如 482% 表示未提存負債約等於 4.8 年的薪資總額。' },
+  { key: 'pens', label: '領取定期給付人數', unit: '人', get: r => r.pensioners, note: '精算基準日領取月退休金、遺屬年金等定期給付的人數（含遺族）。' },
+  { key: 'act', label: '在職人數', unit: '人', get: r => r.actives, note: '精算基準日參加退撫基金的在職人數。公教新進人員自 112 年 7 月 1 日起不再參加，人數會逐年減少。' },
+  { key: 'support', label: '每位領取者對應的在職人數', unit: '人', get: r => r.actives && r.pensioners ? r.actives.map((v, i) => r2(v / r.pensioners[i], 2)) : null, note: '在職人數除以領取定期給付人數。數值越低，表示繳費的人相對於領取的人越少。' },
+  { key: 'pensL', label: '領取給付人員的精算負債', unit: '億元', get: r => r.pensionerLiab, note: '已在領取定期給付者未來應給付金額的現值。' },
+  { key: 'actL', label: '在職人員的精算負債', unit: '億元', get: r => r.activeLiab, note: '在職人員就過去年資已累積、未來應給付金額的現值。' },
+  { key: 'reformPV', label: '年改節省挹注款現值', unit: '億元', get: r => r.reformPV, note: '年金改革節省的退撫經費依法挹注退撫基金，未來預計入帳金額折算到基準日的現值。' },
+  { key: 'reformTotal', label: '年改節省挹注款合計數', unit: '億元', get: r => r.reformTotal, note: '未來約 50 年間預計入帳的年改節省挹注款合計（未折現）。' }
 ];
 /** panel for one metric; also used to export every metric as its own sheet */
 function actHistPanel(key, forExport) {
   const R = actReports(); if (R.length < 2) return null;
-  const m = HIST_METRICS.find(x => x.key === key) || HIST_METRICS[0], who = ['公務人員', '教育人員', '軍職人員'];
+  const avail = HIST_METRICS.filter(x => R.some(r => { const v = x.get(r); return v && v.some(n => n != null); }));   // hide metrics no report provides
+  const m = avail.find(x => x.key === key) || avail[0], who = ['公務人員', '教育人員', '軍職人員'];
+  if (!m) return null;
   const cols = ['精算次別（基準年）'].concat(who, m.now ? ['現行費率'] : [], ['折現率(%)']);
   const rows = R.map(r => { const v = m.get(r) || []; return [`第 ${r.no} 次（${r.baseYear + 1911}）`, v[0] ?? null, v[1] ?? null, v[2] ?? null].concat(m.now ? [r.rateNow] : [], [r.discount ?? null]); });
-  const ctl = `<div class="chips" role="group" aria-label="選擇比較的指標">${HIST_METRICS.map(x => `<button class="chip ychip" data-histmetric="${x.key}" aria-pressed="${x.key === m.key}">${esc(x.label)}</button>`).join('')}</div>
-    <div class="toolbar" style="margin-top:8px"><button class="btn" data-histexport="1" title="每個指標一張工作表，各含資料表與可編輯的折線圖">匯出全部指標 Excel（${HIST_METRICS.length} 張表）</button><span class="meta">右上角的「匯出 Excel」只匯出目前顯示的這個指標。</span></div>`;
+  const ctl = `<div class="chips" role="group" aria-label="選擇比較的指標">${avail.map(x => `<button class="chip ychip" data-histmetric="${x.key}" aria-pressed="${x.key === m.key}">${esc(x.label)}</button>`).join('')}</div>
+    <div class="toolbar" style="margin-top:8px"><button class="btn" data-histexport="1" title="每個指標一張工作表，各含資料表與可編輯的折線圖">匯出全部指標 Excel（${avail.length} 張表）</button><span class="meta">右上角的「匯出 Excel」只匯出目前顯示的這個指標。</span></div>`;
   return { id: forExport ? 'act_hist_' + m.key : 'act_hist', tab: 'fund', noCmp: true, wide: true,
     title: forExport ? `歷次精算－${m.label}` : `歷次精算結果比較：${m.label}`, sub: `單位：${m.unit}；第 ${R[0].no}～${R[R.length - 1].no} 次精算`, unit: m.unit,
     def: `<p><b>${esc(m.label)}</b>：${esc(m.note)}</p><p><b>解讀時請留意</b>：各次精算的折現率（見資料表最後一欄）、俸額增加率等假設不同，制度也有變動（例如年金改革、新進人員改採個人專戶制），數字不是在同一基礎上算出來的，適合看方向與量級，不宜直接相減當作「惡化了多少」。</p><p>每 3 年才有一次精算，圖上每個點是一次報告。</p>`,
@@ -433,11 +448,30 @@ function buildDomestic() {
   const g = tables('gei_benefit')[0];
   if (g) { const h = g.header, c = re => col(h, re);
     const i1 = c(/養老給付_一次給付人數/), i2 = c(/養老給付_一次給付金額/), i3 = c(/養老給付_年金給付人數/), i4 = c(/養老給付_年金給付金額/);
+    /* years the open-data set does not have yet are taken from the manual supplement table (same column order as the CSV) */
+    const lastOpen = Math.max(...g.rows.map(r => +r[0]).filter(isFinite)), sup = manualTable('gei_supplement');
+    const extra = sup ? sup.rows.filter(r => +r[0] > lastOpen && num(r[2]) != null).sort((a, b) => +a[0] - +b[0]) : [];
+    const all = g.rows.map(r => [r, '']).concat(extra.map(r => [r, '']));   // no marker in the year label: it must stay parseable for the cross-indicator tab
+    D._geiYears = { open: lastOpen, latest: all.length ? +all[all.length - 1][0][0] : lastOpen };
+    const srcG = '銓敘部「公教人員保險現金給付統計」（data.gov.tw 165685）' + (extra.length ? `；其中民國 ${extra.map(r => r[0]).join('、')} 年為人工補登（臺灣銀行公保服務網站統計資料，開放平台尚未更新到該年度；狀態：${sup.status}）。` : '。');
+    const sumc = (r, res) => { let s = null; res.forEach(re => { const v = num(r[c(re)]); if (v != null) s = (s || 0) + v; }); return s; };
+    const kinds = [['養老', [/養老給付_一次給付/, /養老給付_年金給付/, /養老給付_遺屬/]], ['失能', [/失能給付/]], ['死亡', [/死亡給付_一次給付/, /死亡給付_年金給付/]], ['眷屬喪葬', [/眷屬喪葬津貼/]], ['育嬰留職停薪', [/育嬰留職停薪津貼/]], ['生育', [/生育給付/]]];
+    const pick = (res, what) => res.map(re => new RegExp(re.source + '.*' + what));
     add({ id: 'gei', tab: 'fund', title: '公教人員保險養老給付', sub: '人數：人；金額：億元', unit: '人',
-      src: '銓敘部「公教人員保險現金給付統計」（data.gov.tw 165685）。',
+      src: srcG,
       table: { columns: ['年度(民國)', '一次養老給付人數', '年金養老給付人數', '一次養老給付金額(億元)', '年金養老給付金額(億元)'],
-        rows: g.rows.map(r => [r[0] + '年', num(r[i1]), num(r[i3]), yi(num(r[i2])), yi(num(r[i4]))]) },
-      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }] } }); }
+        rows: all.map(([r, f]) => [r[0] + '年' + f, num(r[i1]), num(r[i3]), yi(num(r[i2])), yi(num(r[i4]))]) },
+      chart: { type: 'line', series: [{ col: 1 }, { col: 2 }] } });
+    add({ id: 'gei_amt', tab: 'fund', wide: true, title: '公教人員保險現金給付金額－依給付種類', sub: '單位：億元', unit: '億元',
+      def: '<p><b>現金給付</b>：公保對被保險人發生保險事故時核發的各項給付。<b>養老</b>含一次養老給付、養老年金與遺屬一次金及年金；<b>死亡</b>含一次給付與遺屬年金；<b>育嬰留職停薪津貼</b>自 98 年 8 月開辦；<b>生育給付</b>與<b>養老年金</b>在統計表中自 103 年起才有數字，之前年度為 0。</p><p>養老給付金額占絕大部分，且會隨退休人數（例如屆齡退休潮、制度變動前的退休潮）明顯波動。</p>',
+      src: srcG,
+      table: { columns: ['年度(民國)'].concat(kinds.map(k => k[0])), rows: all.map(([r, f]) => [r[0] + '年' + f].concat(kinds.map(k => { const v = sumc(r, pick(k[1], '金額')); return v == null ? null : yi(v); }))) },
+      chart: { type: 'colStacked', series: kinds.map((k, i) => ({ col: i + 1 })) } });
+    add({ id: 'gei_cnt', tab: 'fund', title: '公教人員保險現金給付人數－依給付種類', sub: '單位：人（件）', unit: '人',
+      def: '<p>各項現金給付當年度核付的人數（件數）。養老年金的人數是當年度<b>新核付</b>的人數，不是累計在領人數。</p>',
+      src: srcG,
+      table: { columns: ['年度(民國)'].concat(kinds.map(k => k[0])), rows: all.map(([r, f]) => [r[0] + '年' + f].concat(kinds.map(k => sumc(r, pick(k[1], '人數'))))) },
+      chart: { type: 'line', series: kinds.map((k, i) => ({ col: i + 1 })) } }); }
 
   /* --- 國發會 cross-scheme --- */
   const ndc = (key, id, title, sub, unit, srcText) => { const t = tables(key)[0]; if (!t) return;
@@ -774,6 +808,12 @@ function manualChecks() {
     if (!latestY || latestY < expectY) msgs.push(`${expectY} 年的勞保統計年報應已發布，請補上`);
     push(['li_old_age_avg'], msgs.length ? 'warn' : 'ok', '勞保老年年金平均月領', msgs.length ? msgs.join('；') + '。' : `已填至 ${latestY} 年。`, 'https://www.bli.gov.tw/');
   }
+  if (D._geiYears && manualTable('gei_supplement')) {   // GEI cash benefits: is the latest full year available (open data or manual supplement)?
+    const g2 = new Date(String(D.generatedAt || '').replace(' ', 'T')), expectR = g2.getFullYear() - 1911 - (g2.getMonth() >= 2 ? 1 : 2), y = D._geiYears;
+    push(['gei_supplement'], y.latest < expectR ? 'warn' : 'ok', '公保現金給付統計年度',
+      y.latest < expectR ? `開放平台只到民國 ${y.open} 年，${expectR} 年的全年統計臺灣銀行應已公布，請到公保服務網站查看並補登。` : `開放平台到民國 ${y.open} 年${y.latest > y.open ? `，人工補登到 ${y.latest} 年` : ''}。開放平台更新後會自動改用平台資料。`,
+      'https://www.bot.com.tw/tw/policy-business/government-employees-insurance-service/statistical-data/cash-payment');
+  }
   const cp = manualItem('civil_pension_avg');
   if (cp) push(['civil_pension_avg'], num(cp.value) == null ? 'info' : 'ok', '公務人員月退休所得平均', num(cp.value) == null ? '尚未填寫（選填）；填入後會出現在「各制度老年給付月額比較」圖。' : `已填寫 ${cp.value} 元。`, 'https://www.mocs.gov.tw/');
   return out;
@@ -989,7 +1029,7 @@ function rerenderPanel(id) {
 function onHistClick(e) {
   const m = e.target.closest('[data-histmetric]'), x = e.target.closest('[data-histexport]');
   if (!m && !x) return false;
-  if (x) { const ps = HIST_METRICS.map(h => actHistPanel(h.key, true)).filter(Boolean); if (ps.length) exportXlsx(ps, `歷次精算結果比較_${stamp()}.xlsx`); return true; }
+  if (x) { const seen = new Set(), ps = HIST_METRICS.map(h => actHistPanel(h.key, true)).filter(p => p && !seen.has(p.id) && seen.add(p.id));   /* a metric without data falls back to the first one: drop the duplicate */ if (ps.length) exportXlsx(ps, `歷次精算結果比較_${stamp()}.xlsx`); return true; }
   HIST.metric = m.dataset.histmetric; try { localStorage.setItem('pension-hist-metric', HIST.metric); } catch (err) {}
   rerenderPanel('act_hist'); renderMenu('fund'); return true;
 }
